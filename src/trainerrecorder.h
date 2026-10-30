@@ -89,6 +89,11 @@ public:
     bool isRecording() const;
 
     /**
+     * @brief The game being recorded (valid while isRecording())
+     */
+    const TrainerRecording& currentRecording() const;
+
+    /**
      * @brief Whether a finished recording is available
      */
     bool hasLastRecording() const;

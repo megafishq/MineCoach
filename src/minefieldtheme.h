@@ -34,6 +34,7 @@
 
 #include <QScopedPointer>
 #include <QPixmap>
+#include <QString>
 
 #include "common.h"
 
@@ -146,6 +147,9 @@ private:
     QScopedPointer<QPixmap> pmNoFlag;       ///< Pixmap for unflagged hidden cells
     QScopedPointer<QPixmap> pmBoom;         ///< Pixmap for exploded mine
     QScopedPointer<QPixmap> pmWrongFlag;    ///< Pixmap for incorrectly flagged cells
+
+    QString loadedTheme;                    ///< Theme of the currently rendered pixmaps
+    int loadedCellLength = -1;              ///< Size of the currently rendered pixmaps
 };
 
 #endif // MINEFIELDTHEME_H

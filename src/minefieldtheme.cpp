@@ -32,6 +32,12 @@ MinefieldTheme::MinefieldTheme()
 
 void MinefieldTheme::vSetMinefieldTheme(const QString& theme, const int cellLength)
 {
+    // Rendering 15 SVGs is slow; skip it when nothing changed (e.g. on restart)
+    if(pmMine && theme == loadedTheme && cellLength == loadedCellLength)
+        return;
+    loadedTheme = theme;
+    loadedCellLength = cellLength;
+
     QString prefix;
     if(theme.compare("ClassicLight", Qt::CaseInsensitive) == 0)
     {

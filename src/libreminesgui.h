@@ -199,6 +199,12 @@ private:
 
     void vFinishTrainerRecording(const bool won);
 
+    void vLoadTrainerSettings();
+    void vSaveTrainerSettings();
+    void vArbiterPress(const QMouseEvent* const e);
+    void vArbiterRelease(const QMouseEvent* const e);
+    bool bCellUnderCursor(const QMouseEvent* const e, uchar& x, uchar& y) const;
+
 private Q_SLOTS:
     /**
      * @brief
@@ -361,6 +367,23 @@ private:
     QAction* actionAnalyzeLastGame;
     QAction* actionOpenRecording;
     QAction* actionOpenRecordingsFolder;
+
+    QAction* actionArbiterInput;      ///< Arbiter style mouse controls
+    QAction* actionInstantRestart;    ///< F2 / face click restart without confirmation
+    QAction* actionFastBoard;         ///< Skip the minefield generation animation
+    QAction* actionAskToSaveScores;   ///< Show the save score dialog after games
+    QList<QAction*> actionsAutoRestart; ///< Auto-restart thresholds (percent of 3BV)
+
+    bool bArbiterInput = true;        ///< Flag on press, both-button / middle chord, release anywhere
+    bool bInstantRestart = true;      ///< Restart without confirmation (F2, face click)
+    bool bFastBoard = true;           ///< No generation animation, reuse cell widgets
+    bool bAskToSaveScores = false;    ///< Show the save score dialog (wins are saved silently otherwise)
+    int iAutoRestartPercent = 10;     ///< Auto-restart losses below this percent of 3BV (0 = off)
+
+    bool bChordPending = false;       ///< Both buttons (or middle) are down: next release chords
+    bool bChordDone = false;          ///< The pending chord already fired
+    bool bAutoRestartPending = false; ///< The lost game will be restarted automatically
+    QString trainerStatsText;         ///< Arbiter style statistics of the last game
 
     QPushButton* buttonAnalyzeGame;   ///< Shown at the end of a game to open the analysis
     TrainerRecorder trainerRecorder;  ///< Records input and cursor for the trainer

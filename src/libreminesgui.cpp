@@ -38,6 +38,8 @@
 #include <QFileDialog>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QSettings>
+#include <QActionGroup>
 
 #include "libreminesgui.h"
 #include "libreminesscoresdialog.h"
@@ -99,6 +101,12 @@ LibreMinesGui::LibreMinesGui(QWidget *parent, const int thatWidth, const int tha
 
     this->setWindowIcon(QIcon(":/icons_rsc/icons/libremines.svg"));
     this->setWindowTitle("LibreMines Trainer");
+
+    vLoadTrainerSettings();
+
+    // F2 starts a new game instantly (Arbiter / Windows Minesweeper habit)
+    connect(new QShortcut(QKeySequence(Qt::Key_F2), this), &QShortcut::activated,
+            this, &LibreMinesGui::SLOT_RestartGame);
 
     // The trainer records every cell action, whether it comes from the mouse
     // or from the keyboard controller
@@ -170,7 +178,13 @@ LibreMinesGui::~LibreMinesGui()
 
 bool LibreMinesGui::eventFilter(QObject* object, QEvent* event)
 {
-    Q_UNUSED(object)
+    // Clicking the face starts a new game, like in Arbiter
+    if(object == labelFaceReactionInGame && event->type() == QEvent::MouseButtonRelease &&
+       bInstantRestart && labelFaceReactionInGame->isVisible())
+    {
+        QTimer::singleShot(0, this, &LibreMinesGui::SLOT_RestartGame);
+        return true;
+    }
 
     // Just handle those two events
     if(event->type() != QEvent::KeyPress &&
@@ -233,8 +247,19 @@ void LibreMinesGui::vNewGame(const uchar _X,
                              "To fix it, go to (Main Menu > Options > Preferences) and edit your preferences."));
     }
 
-    // Create a new matrix
-    principalMatrix = std::vector<std::vector<CellGui>> (_X, std::vector<CellGui>(_Y));
+    bAutoRestartPending = false;
+    bChordPending = false;
+    bChordDone = false;
+
+    // Reuse the cell widgets when the board size did not change: creating
+    // hundreds of widgets is what makes restarts slow
+    const bool bReuseCells = bFastBoard && !principalMatrix.empty() &&
+                             principalMatrix.size() == _X && principalMatrix[0].size() == _Y;
+    if(!bReuseCells)
+    {
+        vResetPrincipalMatrix();
+        principalMatrix = std::vector<std::vector<CellGui>> (_X, std::vector<CellGui>(_Y));
+    }
 
     buttonQuitInGame->setEnabled(false);
     buttonRestartInGame->setEnabled(false);
@@ -273,23 +298,35 @@ void LibreMinesGui::vNewGame(const uchar _X,
 
     updateFaceReaction(FacesReaction::GAME_BEING_GENERATED);
 
-    const bool bCleanNeighborCellsWhenClickedOnShowedLabel =
-            preferences->optionCleanNeighborCellsWhenClickedOnShowedCell();
+    if(!bReuseCells)
+        qApp->processEvents();
 
-    qApp->processEvents();
-
-    // Create each cell
+    // Create (or reset) each cell
     for(uchar j=0; j<_Y; j++)
     {
         for (uchar i=0; i<_X; i++)
         {
             CellGui& cell = principalMatrix[i][j];
 
-            cell.label = new QLabel_adapted(widgetBoardContents, i, j);
-            cell.button = new QLabel_adapted(widgetBoardContents, i, j);
+            if(!bReuseCells)
+            {
+                cell.label = new QLabel_adapted(widgetBoardContents, i, j);
+                cell.button = new QLabel_adapted(widgetBoardContents, i, j);
 
-            layoutBoard->addWidget(cell.label, j, i);
-            layoutBoard->addWidget(cell.button, j, i);
+                layoutBoard->addWidget(cell.label, j, i);
+                layoutBoard->addWidget(cell.button, j, i);
+
+                // Revealed cells are always wired: they handle left-click
+                // chording (preference) and Arbiter style chords
+                connect(cell.button, &QLabel_adapted::SIGNAL_released,
+                        this, &LibreMinesGui::SLOT_OnCellButtonReleased);
+                connect(cell.button, &QLabel_adapted::SIGNAL_clicked,
+                        this, &LibreMinesGui::SLOT_OnCellButtonClicked);
+                connect(cell.label, &QLabel_adapted::SIGNAL_released,
+                        this, &LibreMinesGui::SLOT_onCellLabelReleased);
+                connect(cell.label, &QLabel_adapted::SIGNAL_clicked,
+                        this, &LibreMinesGui::SLOT_onCellLabelClicked);
+            }
 
             cell.label->resize(cellLength, cellLength);
             cell.label->setPixmapCached(fieldTheme.getPixmapFromCellValue(CellValue::ZERO));
@@ -302,22 +339,10 @@ void LibreMinesGui::vNewGame(const uchar _X,
             cell.button->show();
             cell.button->setEnabled(false);
 
-            connect(cell.button, &QLabel_adapted::SIGNAL_released,
-                    this, &LibreMinesGui::SLOT_OnCellButtonReleased);
-            connect(cell.button, &QLabel_adapted::SIGNAL_clicked,
-                    this, &LibreMinesGui::SLOT_OnCellButtonClicked);
-
-            if(bCleanNeighborCellsWhenClickedOnShowedLabel)
-            {
-                connect(cell.label, &QLabel_adapted::SIGNAL_released,
-                        this, &LibreMinesGui::SLOT_onCellLabelReleased);
-                connect(cell.label, &QLabel_adapted::SIGNAL_clicked,
-                        this, &LibreMinesGui::SLOT_onCellLabelClicked);
-            }
-
-            if(preferences->optionMinefieldGenerationAnimation() == LibreMines::AnimationOn ||
+            if(!bFastBoard &&
+               (preferences->optionMinefieldGenerationAnimation() == LibreMines::AnimationOn ||
                (preferences->optionMinefieldGenerationAnimation() == LibreMines::AnimationLimited &&
-                                   i == _X - 1))
+                                   i == _X - 1)))
             {
                 qApp->processEvents();
             }
@@ -365,11 +390,9 @@ void LibreMinesGui::vNewGame(const uchar _X,
     // Communication (GUI -> GameEngine)
     connect(this, &LibreMinesGui::SIGNAL_cleanCell,
             gameEngine.get(), &LibreMinesGameEngine::SLOT_cleanCell);
-    if(bCleanNeighborCellsWhenClickedOnShowedLabel)
-    {
-        connect(this, &LibreMinesGui::SIGNAL_cleanNeighborCells,
-                gameEngine.get(), &LibreMinesGameEngine::SLOT_cleanNeighborCells);
-    }
+    // The engine validates every chord, so it is always connected
+    connect(this, &LibreMinesGui::SIGNAL_cleanNeighborCells,
+            gameEngine.get(), &LibreMinesGameEngine::SLOT_cleanNeighborCells);
     connect(this, &LibreMinesGui::SIGNAL_addOrRemoveFlag,
             gameEngine.get(), &LibreMinesGameEngine::SLOT_changeFlagState);
     connect(this, &LibreMinesGui::SIGNAL_stopGame,
@@ -473,6 +496,29 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     menuHighScores->addActions({actionShowHighScores, actionImportHighScores, actionExportHighScores});
     menuHelp->addActions({actionAbout, actionAboutQt, actionGitHubHomePage});
     menuTrainer->addActions({actionAnalyzeLastGame, actionOpenRecording, actionOpenRecordingsFolder});
+    menuTrainer->addSeparator();
+
+    actionArbiterInput = menuTrainer->addAction(tr("Arbiter Style Mouse Controls"));
+    actionArbiterInput->setToolTip(tr("Flag on right press, chord with both buttons or middle click, "
+                                      "act on the cell under the cursor when releasing"));
+    actionInstantRestart = menuTrainer->addAction(tr("Instant Restart (F2 / Click Face)"));
+    actionFastBoard = menuTrainer->addAction(tr("Fast Board Setup (No Animation)"));
+    actionAskToSaveScores = menuTrainer->addAction(tr("Ask to Save Scores"));
+    for(QAction* a : {actionArbiterInput, actionInstantRestart, actionFastBoard, actionAskToSaveScores})
+        a->setCheckable(true);
+    menuTrainer->setToolTipsVisible(true);
+
+    QMenu* menuAutoRestart = menuTrainer->addMenu(tr("Auto-Restart Early Losses"));
+    QActionGroup* groupAutoRestart = new QActionGroup(this);
+    for(int percent : {0, 5, 10, 25, 50})
+    {
+        QAction* a = menuAutoRestart->addAction(percent == 0 ? tr("Off") :
+                                                tr("Lost with less than %1% of 3BV solved").arg(percent));
+        a->setCheckable(true);
+        a->setData(percent);
+        groupAutoRestart->addAction(a);
+        actionsAutoRestart.append(a);
+    }
 
     menuOptions->setTitle(tr("Options"));
     menuHighScores->setTitle(tr("High Scores"));
@@ -673,6 +719,11 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
             this, &LibreMinesGui::SLOT_openRecording);
     connect(actionOpenRecordingsFolder, &QAction::triggered,
             this, &LibreMinesGui::SLOT_openRecordingsFolder);
+
+    for(QAction* a : {actionArbiterInput, actionInstantRestart, actionFastBoard, actionAskToSaveScores})
+        connect(a, &QAction::toggled, this, &LibreMinesGui::vSaveTrainerSettings);
+    for(QAction* a : actionsAutoRestart)
+        connect(a, &QAction::triggered, this, &LibreMinesGui::vSaveTrainerSettings);
 
     connect(actionAboutQt, &QAction::triggered,
             [this](){ QMessageBox::aboutQt(this, "About Qt"); });
@@ -1100,7 +1151,7 @@ void LibreMinesGui::SLOT_RestartGame()
 
     // Check if there is a game happening. If there is one, create a dialog asking
     //  if the user want to quit the game
-    if(gameEngine && gameEngine->isGameActive() &&
+    if(!bInstantRestart && gameEngine && gameEngine->isGameActive() &&
        progressBarGameCompleteInGame->value() != progressBarGameCompleteInGame->minimum())
     {
         QMessageBox messageBox;
@@ -1115,7 +1166,10 @@ void LibreMinesGui::SLOT_RestartGame()
             return;
     }
 
-    vResetPrincipalMatrix();
+    if(!gameEngine)
+        return;
+
+    trainerRecorder.vStop();
 
     labelStatsLastMatch->setText(" ");
     labelYouWonYouLost->setText(" ");
@@ -1150,6 +1204,7 @@ void LibreMinesGui::SLOT_QuitGame()
     qApp->restoreOverrideCursor();
 
     labelStatsLastMatch->setText(" ");
+    bAutoRestartPending = false;
 
     Q_EMIT SIGNAL_stopGame();
     trainerRecorder.vStop();
@@ -1173,6 +1228,12 @@ void LibreMinesGui::updateFaceReaction(FacesReaction::GameEvent newState)
 
 void LibreMinesGui::SLOT_OnCellButtonReleased(const QMouseEvent *const e)
 {
+    if(bArbiterInput)
+    {
+        vArbiterRelease(e);
+        return;
+    }
+
     if(!gameEngine->isGameActive() || controller.isActive())
         return;
 
@@ -1209,6 +1270,12 @@ void LibreMinesGui::SLOT_OnCellButtonReleased(const QMouseEvent *const e)
 
 void LibreMinesGui::SLOT_OnCellButtonClicked(const QMouseEvent *const e)
 {
+    if(bArbiterInput)
+    {
+        vArbiterPress(e);
+        return;
+    }
+
     if(!gameEngine->isGameActive() || controller.isActive())
         return;
 
@@ -1220,7 +1287,14 @@ void LibreMinesGui::SLOT_OnCellButtonClicked(const QMouseEvent *const e)
 
 void LibreMinesGui::SLOT_onCellLabelReleased(const QMouseEvent *const e)
 {
-    if(!gameEngine->isGameActive() || controller.isActive())
+    if(bArbiterInput)
+    {
+        vArbiterRelease(e);
+        return;
+    }
+
+    if(!preferences->optionCleanNeighborCellsWhenClickedOnShowedCell() ||
+       !gameEngine->isGameActive() || controller.isActive())
         return;
 
     updateFaceReaction(FacesReaction::DEFAULT);
@@ -1252,7 +1326,11 @@ void LibreMinesGui::SLOT_onCellLabelReleased(const QMouseEvent *const e)
 
 void LibreMinesGui::SLOT_onCellLabelClicked(const QMouseEvent *const e)
 {
-    Q_UNUSED(e)
+    if(bArbiterInput)
+    {
+        vArbiterPress(e);
+        return;
+    }
 
     if(!gameEngine->isGameActive() || controller.isActive())
         return;
@@ -1281,6 +1359,10 @@ void LibreMinesGui::SLOT_endGameScore(LibreMinesScore score,
                                       double dCellsPerSecond,
                                       bool ignorePreferences)
 {
+    // Early losses restart automatically: no stats, no dialog
+    if(bAutoRestartPending && !ignorePreferences)
+        return;
+
     QString QS_Statics =
             tr("Total time: %1 secs").arg(QString::number(score.iTimeInNs*1e-9, 'f', 3)) + '\n'
             + tr("Correct Flags: %1").arg(iCorrectFlags) + '\n'
@@ -1291,6 +1373,8 @@ void LibreMinesGui::SLOT_endGameScore(LibreMinesScore score,
             + tr("Cells/s: %1").arg(QString::number(dCellsPerSecond, 'f', 3)) + '\n'
             + '\n'
             + tr("Game Complete: %1 %").arg(QString::number(score.dPercentageGameCompleted, 'f', 2));
+    if(!trainerStatsText.isEmpty())
+        QS_Statics += "\n\n" + trainerStatsText;
 
     labelStatsLastMatch->setText(QS_Statics);
 
@@ -1391,7 +1475,12 @@ void LibreMinesGui::SLOT_endGameScore(LibreMinesScore score,
 
             AskToSaveMatchScore behaviour = preferences->optionAskToSaveMatchScoreBehaviour();
 
-            if(ignorePreferences ||
+            if(!ignorePreferences && !bAskToSaveScores)
+            {
+                // Competitive play: never interrupt with a dialog, keep every win
+                saveScore = score.bGameCompleted;
+            }
+            else if(ignorePreferences ||
                behaviour == LibreMines::SaveAlways ||
                ((behaviour & LibreMines::SaveWhenGameCompleted) && score.bGameCompleted) ||
                ((behaviour & LibreMines::SaveWhenNewHighScore) && index == 0))
@@ -1609,12 +1698,176 @@ void LibreMinesGui::vFinishTrainerRecording(const bool won)
         }
     }
 
+    trainerStatsText.clear();
+    if(!trainerRecorder.isRecording())
+        return;
+
+    TrainerRecording rec = trainerRecorder.currentRecording();
+    rec.mineLayout = layout;
+    TrainerBoard replay(rec);
+    for(const TrainerAction& a : rec.actions)
+        replay.apply(a);
+    const int bv = replay.threeBV();
+    const int bvSolved = replay.threeBVSolved();
+
+    // Died too early to be worth reviewing: start over right away
+    if(!won && iAutoRestartPercent > 0 && bv > 0 && bvSolved*100 < iAutoRestartPercent*bv)
+    {
+        trainerRecorder.vStop();
+        bAutoRestartPending = true;
+        QTimer::singleShot(250, this, [this]()
+        {
+            if(bAutoRestartPending)
+                SLOT_RestartGame();
+        });
+        return;
+    }
+
+    const double seconds = rec.actions.size() > 1 ?
+                           (rec.actions.last().tMs - rec.actions.first().tMs)/1000.0 : 0;
+    const int clicks = rec.actions.size();
+    trainerStatsText = tr("3BV: %1/%2\n3BV/s: %3\nClicks: %4\nEfficiency: %5 %")
+                       .arg(bvSolved).arg(bv)
+                       .arg(seconds > 0 ? QString::number(bvSolved/seconds, 'f', 2) : QString("-"))
+                       .arg(clicks)
+                       .arg(clicks > 0 ? QString::number(100.0*bvSolved/clicks, 'f', 0) : QString("-"));
+
     if(trainerRecorder.bFinish(won, layout))
     {
         buttonAnalyzeGame->show();
         actionAnalyzeLastGame->setEnabled(true);
         widgetEndGameResultsContents->adjustSize();
     }
+}
+
+void LibreMinesGui::vLoadTrainerSettings()
+{
+    QSettings settings(dirAppData.absoluteFilePath("trainer.ini"), QSettings::IniFormat);
+    bArbiterInput = settings.value("ArbiterInput", true).toBool();
+    bInstantRestart = settings.value("InstantRestart", true).toBool();
+    bFastBoard = settings.value("FastBoard", true).toBool();
+    bAskToSaveScores = settings.value("AskToSaveScores", false).toBool();
+    iAutoRestartPercent = settings.value("AutoRestartPercent", 10).toInt();
+
+    const QSignalBlocker b1(actionArbiterInput), b2(actionInstantRestart),
+                         b3(actionFastBoard), b4(actionAskToSaveScores);
+    actionArbiterInput->setChecked(bArbiterInput);
+    actionInstantRestart->setChecked(bInstantRestart);
+    actionFastBoard->setChecked(bFastBoard);
+    actionAskToSaveScores->setChecked(bAskToSaveScores);
+    for(QAction* a : actionsAutoRestart)
+    {
+        const QSignalBlocker blocker(a);
+        a->setChecked(a->data().toInt() == iAutoRestartPercent);
+    }
+}
+
+void LibreMinesGui::vSaveTrainerSettings()
+{
+    bArbiterInput = actionArbiterInput->isChecked();
+    bInstantRestart = actionInstantRestart->isChecked();
+    bFastBoard = actionFastBoard->isChecked();
+    bAskToSaveScores = actionAskToSaveScores->isChecked();
+    for(QAction* a : actionsAutoRestart)
+    {
+        if(a->isChecked())
+            iAutoRestartPercent = a->data().toInt();
+    }
+
+    QDir().mkpath(dirAppData.path());
+    QSettings settings(dirAppData.absoluteFilePath("trainer.ini"), QSettings::IniFormat);
+    settings.setValue("ArbiterInput", bArbiterInput);
+    settings.setValue("InstantRestart", bInstantRestart);
+    settings.setValue("FastBoard", bFastBoard);
+    settings.setValue("AskToSaveScores", bAskToSaveScores);
+    settings.setValue("AutoRestartPercent", iAutoRestartPercent);
+}
+
+bool LibreMinesGui::bCellUnderCursor(const QMouseEvent* const e, uchar& x, uchar& y) const
+{
+    if(principalMatrix.empty() || cellLength <= 0)
+        return false;
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const QPoint p = widgetBoardContents->mapFromGlobal(e->globalPosition().toPoint());
+#else
+    const QPoint p = widgetBoardContents->mapFromGlobal(e->globalPos());
+#endif
+    if(p.x() < 0 || p.y() < 0)
+        return false;
+
+    const int cx = p.x()/cellLength;
+    const int cy = p.y()/cellLength;
+    if(cx >= static_cast<int>(principalMatrix.size()) ||
+       cy >= static_cast<int>(principalMatrix[0].size()))
+        return false;
+
+    x = static_cast<uchar>(cx);
+    y = static_cast<uchar>(cy);
+    return true;
+}
+
+void LibreMinesGui::vArbiterPress(const QMouseEvent* const e)
+{
+    if(!gameEngine || !gameEngine->isGameActive() || controller.isActive())
+        return;
+
+    const Qt::MouseButtons held = e->buttons();
+    if(((held & Qt::LeftButton) && (held & Qt::RightButton)) || e->button() == Qt::MiddleButton)
+    {
+        // Both buttons (or the middle one): chord when a button is released
+        bChordPending = true;
+        updateFaceReaction(FacesReaction::UNHIDDEN_CELL_PRESSED);
+        return;
+    }
+
+    if(e->button() == Qt::RightButton)
+    {
+        // Flags go down on press, not on release
+        uchar x, y;
+        if(bCellUnderCursor(e, x, y) && gameEngine->getPrincipalMatrix()[x][y].isHidden)
+            Q_EMIT SIGNAL_addOrRemoveFlag(x, y);
+        return;
+    }
+
+    if(e->button() == Qt::LeftButton)
+        updateFaceReaction(FacesReaction::HIDDEN_CELL_PRESSED);
+}
+
+void LibreMinesGui::vArbiterRelease(const QMouseEvent* const e)
+{
+    const bool allReleased = e->buttons() == Qt::NoButton;
+
+    if(!gameEngine || !gameEngine->isGameActive() || controller.isActive())
+    {
+        if(allReleased)
+            bChordPending = bChordDone = false;
+        return;
+    }
+
+    updateFaceReaction(FacesReaction::DEFAULT);
+
+    // The cell under the cursor counts, not the one that was pressed
+    uchar x, y;
+    const bool onBoard = bCellUnderCursor(e, x, y);
+
+    if(bChordPending)
+    {
+        if(!bChordDone && onBoard)
+            Q_EMIT SIGNAL_cleanNeighborCells(x, y);
+        bChordDone = true;
+        if(allReleased)
+            bChordPending = bChordDone = false;
+        return;
+    }
+
+    if(e->button() != Qt::LeftButton || !onBoard)
+        return;
+
+    if(gameEngine->getPrincipalMatrix()[x][y].isHidden)
+        Q_EMIT SIGNAL_cleanCell(x, y);
+    else if(preferences->optionCleanNeighborCellsWhenClickedOnShowedCell())
+        Q_EMIT SIGNAL_cleanNeighborCells(x, y);
 }
 
 void LibreMinesGui::SLOT_analyzeLastGame()

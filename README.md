@@ -29,6 +29,17 @@ libremines --analyze game.json   # print the text report
 libremines --review game.json    # open the analysis window
 ```
 
+### Competitive (Arbiter-style) gameplay
+
+The fork is tuned for fast, serious play. Every option below is on by default and can be toggled from the **Trainer** menu (settings are stored in `<app data>/trainer.ini`):
+
+- **Arbiter style mouse controls**: flags are placed on right-button *press*; chord with left+right together or the middle button; a click acts on the cell under the cursor when the button is released, so you can press, slide and release. Left-clicking a revealed number still chords if that preference is enabled.
+- **Instant restart**: **F2** or clicking the face starts a new game immediately, with no "are you sure?" dialog (Ctrl+R still works).
+- **Fast board setup**: no minefield generation animation, and restarting on the same board size reuses the existing cells instead of rebuilding them. Theme pixmaps and pressed-cell images are cached, so restarts on Expert are effectively instant.
+- **Auto-restart early losses**: if you die before solving a set share of the board's 3BV (default 10%, options Off/5/10/25/50%), a new game starts after a quarter of a second, with no stats, no dialog and no saved recording.
+- **No score popups**: completed games are saved to the high scores silently. Turn on **Ask to Save Scores** for the original dialog; the **Save Score** button is always there.
+- **End-of-game stats**: 3BV solved/total, 3BV/s, clicks and efficiency are shown in the results panel next to the usual statistics.
+
 ## Installing from Package Manager
 
 ### Arch User Repository

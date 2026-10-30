@@ -106,6 +106,11 @@ bool TrainerRecorder::isRecording() const
     return bRecording;
 }
 
+const TrainerRecording& TrainerRecorder::currentRecording() const
+{
+    return current;
+}
+
 bool TrainerRecorder::hasLastRecording() const
 {
     return bHasLast;

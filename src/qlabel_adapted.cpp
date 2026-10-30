@@ -20,6 +20,7 @@
 
 #include "qlabel_adapted.h"
 #include <QMouseEvent>
+#include <QHash>
 
 QLabel_adapted::QLabel_adapted(QWidget *parent, const uchar x, const uchar y):
     QLabel(parent),
@@ -44,10 +45,19 @@ void QLabel_adapted::setPixmapCached(const QPixmap& pxmap)
     // Store the normal pixmap
     normalPixmap = pxmap;
 
-    // Pre-compute and store inverted version once
-    QImage img = pxmap.toImage();
-    img.invertPixels();
-    invertedPixmap = QPixmap::fromImage(img);
+    // Inverting an image is expensive and every cell shares the same few theme
+    // pixmaps, so keep one inverted copy per source pixmap
+    static QHash<qint64, QPixmap> invertedCache;
+    auto it = invertedCache.constFind(pxmap.cacheKey());
+    if(it == invertedCache.constEnd())
+    {
+        if(invertedCache.size() > 256)
+            invertedCache.clear();
+        QImage img = pxmap.toImage();
+        img.invertPixels();
+        it = invertedCache.insert(pxmap.cacheKey(), QPixmap::fromImage(img));
+    }
+    invertedPixmap = *it;
 
     // Set the normal pixmap initially
     setPixmap(normalPixmap);
