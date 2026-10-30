@@ -128,6 +128,11 @@ Q_SIGNALS:
      */
     void SIGNAL_cellClicked(int cell);
 
+    /**
+     * @brief A cell was pressed with any mouse button (Qt::MouseButton value)
+     */
+    void SIGNAL_cellPressed(int cell, int button);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;

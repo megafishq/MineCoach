@@ -47,6 +47,17 @@ After each answer the solution is highlighted, with the simplified view and a st
 
 From the command line, `minecoach --history 50` prints the same summary and playlist.
 
+## Speed trainer
+
+**Trainer > Speed Trainer...** is an Aim Lab style arena with four short drills. Each keeps your personal best and recent scores:
+
+- **Flick targets**: 30 cells light up one at a time on an Expert sized grid; click each as fast as you can. Score = 1000 x accuracy / seconds per target, with reaction time and how straight your cursor path was.
+- **Pattern sprint** (60 s): click a 100% safe cell in as many positions as you can. Positions are generated mid-game Expert boards (favouring real patterns) mixed with your own missed patterns.
+- **Chord sprint** (60 s): click the number whose chord opens the most cells.
+- **Flag + chord rhythm** (60 s): right-click every mine around the highlighted number, then chord it.
+
+Sprints score +100 per correct answer and -50 per mistake; a wrong answer shows the solution for a moment before the next position.
+
 ## Competitive (Arbiter-style) gameplay
 
 MineCoach is tuned for fast, serious play. Every option below is on by default and can be toggled from the **Trainer** menu (settings are stored in `<app data>/trainer.ini`):

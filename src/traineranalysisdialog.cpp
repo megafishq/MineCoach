@@ -247,14 +247,15 @@ void TrainerBoardView::mouseMoveEvent(QMouseEvent* event)
 
 void TrainerBoardView::mousePressEvent(QMouseEvent* event)
 {
-    if(event->button() != Qt::LeftButton)
-        return;
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     const int cell = cellAt(event->position());
 #else
     const int cell = cellAt(event->localPos());
 #endif
-    if(cell >= 0)
+    if(cell < 0)
+        return;
+    Q_EMIT SIGNAL_cellPressed(cell, int(event->button()));
+    if(event->button() == Qt::LeftButton)
         Q_EMIT SIGNAL_cellClicked(cell);
 }
 

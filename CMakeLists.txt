@@ -196,6 +196,8 @@ set(SOURCE_FILES
     src/traineranalyzer.cpp src/traineranalyzer.h
     src/traineranalysisdialog.cpp src/traineranalysisdialog.h
     src/trainerhistory.cpp src/trainerhistory.h
+    src/trainerspeed.cpp src/trainerspeed.h
+    src/trainerspeeddialog.cpp src/trainerspeeddialog.h
     src/trainerpracticedialog.cpp src/trainerpracticedialog.h
     share/facesreaction.qrc
     share/icons.qrc

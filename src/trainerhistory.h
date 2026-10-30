@@ -52,8 +52,9 @@ struct TrainerPuzzle
      */
     enum class Type : quint8
     {
-        SafeCell = 0, ///< Click any cell that is 100% safe
-        BestChord = 1 ///< Click the number whose chord opens the most cells
+        SafeCell = 0,    ///< Click any cell that is 100% safe
+        BestChord = 1,   ///< Click the number whose chord opens the most cells
+        FlagAndChord = 2 ///< Flag the mines around chordCell, then chord it (speed trainer)
     };
 
     Type type = Type::SafeCell;  ///< Kind of puzzle
@@ -68,6 +69,7 @@ struct TrainerPuzzle
     QVector<TrainerDeduction> prerequisites; ///< SafeCell: earlier steps of the deduction
     int chordCell = -1;          ///< BestChord: the best number to chord on
     int chordOpens = 0;          ///< BestChord: cells that chord opens
+    QVector<int> mustFlag;       ///< FlagAndChord: mines to flag before chording
 };
 
 /**

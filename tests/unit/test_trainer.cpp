@@ -23,6 +23,8 @@
 #include "traineranalyzer.h"
 #include "trainerrecording.h"
 #include "trainerhistory.h"
+#include "trainerspeed.h"
+#include <QElapsedTimer>
 
 class TestTrainer : public QObject
 {
@@ -64,6 +66,7 @@ private slots:
     void testFlagsCountAsKnownOnlyWhenProvable();
     void testLocalWindowIgnoresFarInformation();
     void testHistorySummaryAndPlaylist();
+    void testSpeedPuzzlesAreValid();
     void testCursorJumpPointsAtMissedCell();
     void testShortMoveIsNotAJump();
     void testClicksCouldBeChord();
@@ -452,6 +455,53 @@ void TestTrainer::testHistorySummaryAndPlaylist()
 
     // The playlist never exceeds what was asked for
     QCOMPARE(history.playlist(1).size(), 1);
+}
+
+void TestTrainer::testSpeedPuzzlesAreValid()
+{
+    TrainerSpeed speed(4242);
+    QElapsedTimer clock;
+    clock.start();
+    for(int i=0; i<10; ++i)
+    {
+        TrainerSpeedPosition pos;
+        TrainerPuzzle p;
+
+        QVERIFY(speed.nextSafePuzzle(pos, p));
+        QCOMPARE(p.type, TrainerPuzzle::Type::SafeCell);
+        QVERIFY(!pos.recording.isMine(p.deduction.cell % pos.recording.width,
+                                      p.deduction.cell / pos.recording.width));
+        QString why;
+        QVERIFY2(TrainerHistory::checkAnswer(pos.recording, p, p.deduction.cell, &why), qPrintable(why));
+
+        QVERIFY(speed.nextChordPuzzle(pos, p));
+        QCOMPARE(p.type, TrainerPuzzle::Type::BestChord);
+        QVERIFY2(TrainerHistory::checkAnswer(pos.recording, p, p.chordCell, &why), qPrintable(why));
+
+        QVERIFY(speed.nextFlagChordPuzzle(pos, p));
+        QCOMPARE(p.type, TrainerPuzzle::Type::FlagAndChord);
+        TrainerBoard b(pos.recording);
+        b.restore(p.snapshot);
+        QVERIFY(!p.mustFlag.isEmpty());
+        for(int m : p.mustFlag)
+        {
+            QVERIFY(b.isMine(m));
+            QVERIFY(b.neighbours(p.chordCell).contains(m));
+            b.toggleMark(m);
+        }
+        QCOMPARE(b.flagsAround(p.chordCell), int(b.value[p.chordCell]));
+        bool boom = true;
+        const QVector<int> opens = b.chordPreview(p.chordCell, &boom);
+        QVERIFY(!boom);
+        QCOMPARE(int(opens.size()) > 0, true);
+    }
+    // 30 puzzles must be quick enough for a live sprint
+    qDebug() << "speed puzzle generation:" << clock.elapsed() << "ms for 30 puzzles";
+    QVERIFY(clock.elapsed() < 30000);
+
+    QCOMPARE(TrainerSpeed::sprintScore(10, 2), 900);
+    QCOMPARE(TrainerSpeed::flickScore(30, 0, 500), 2000);
+    QCOMPARE(TrainerSpeed::flickScore(0, 5, 500), 0);
 }
 
 void TestTrainer::testCursorJumpPointsAtMissedCell()

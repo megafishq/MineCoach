@@ -308,6 +308,11 @@ private Q_SLOTS:
      */
     void SLOT_analyzeRecentGames();
 
+    /**
+     * @brief Open the Aim Lab style speed trainer
+     */
+    void SLOT_speedTrainer();
+
 Q_SIGNALS:
     void SIGNAL_cleanCell(const uchar _X, const uchar _Y);
     void SIGNAL_cleanNeighborCells(const uchar _X, const uchar _Y);
@@ -378,6 +383,7 @@ private:
     QAction* actionOpenRecording;
     QAction* actionOpenRecordingsFolder;
     QAction* actionAnalyzeRecentGames;
+    QAction* actionSpeedTrainer;
 
     QAction* actionArbiterInput;      ///< Arbiter style mouse controls
     QAction* actionInstantRestart;    ///< F2 / face click restart without confirmation
