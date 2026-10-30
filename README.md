@@ -16,6 +16,10 @@ Every game is recorded: each reveal, flag and chord with its timestamp, plus the
 - **Rejected / wasted / low-value chords**, **unnecessary guesses** (clicking an unproven cell while a proven safe cell existed) and **wrong flags**.
 - Stats: 3BV, 3BV/s, click efficiency, cursor travel and click counts.
 
+Cells are named `(column,row)` counting from the top-left cell `(1,1)`; column and row numbers are drawn around the board, hovering a cell shows its coordinates, and hovering a coordinate in the text outlines that cell on the board.
+
+For pattern findings, **Read more** opens the pattern twice side by side: exactly as it was on the board, and simplified to what matters (each number reduced to the mines it still needs, known mines and shared cells marked, everything else faded), with a step-by-step explanation of why the cell is safe or a mine.
+
 Recordings are saved as JSON in `<app data>/trainer_recordings` (**Trainer > Open Recordings Folder**) and can be reopened with **Trainer > Open Recording...**. From the command line:
 
 ```sh
