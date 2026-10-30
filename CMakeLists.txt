@@ -35,7 +35,7 @@ message(STATUS "Setting macOS deployment target to ${CMAKE_OSX_DEPLOYMENT_TARGET
 
 # MineCoach is a fork of LibreMines 3.0.1 (https://github.com/Bollos00/LibreMines)
 project(minecoach
-    VERSION "1.0.2"
+    VERSION "1.0.3"
     DESCRIPTION " A Minesweeper trainer that records your games and coaches cursor movement, patterns and chording. Based on LibreMines. "
     HOMEPAGE_URL "https://github.com/megafishq/MineCoach"
     LANGUAGES "CXX"
