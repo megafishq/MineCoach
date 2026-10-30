@@ -416,18 +416,35 @@ public:
         return remaining;
     }
 
+    // Hidden cells of constraint k that are already known to be mines
+    QVector<int> knownMinesOf(int k) const
+    {
+        QVector<int> mines;
+        for(int cell : constraints[k].cells)
+        {
+            auto it = known.constFind(cell);
+            if(it != known.constEnd() && it->mine)
+                mines.append(cell);
+        }
+        return mines;
+    }
+
+    // `details` carries the explanation data (group, region, shared, ...)
     bool add(int cell, bool mine, TrainerDeduction::Kind kind, const QVector<int>& clues,
-             const QVector<int>& clueRemaining, const QString& pattern = QString())
+             const QVector<int>& clueRemaining, const QString& pattern = QString(),
+             const TrainerDeduction& details = TrainerDeduction())
     {
         if(known.contains(cell))
             return false;
-        TrainerDeduction d;
+        TrainerDeduction d = details;
         d.cell = cell;
         d.mine = mine;
         d.kind = kind;
         d.clues = clues;
         d.clueRemaining = clueRemaining;
         d.pattern = pattern;
+        if(d.group.isEmpty())
+            d.group = {cell};
         known.insert(cell, d);
         return true;
     }
@@ -514,17 +531,21 @@ bool singlesPass(SolverState& s)
         if(unknown.isEmpty())
             continue;
         const int origin = s.constraints[k].origin;
+        TrainerDeduction details;
+        details.group = unknown;
+        details.region = unknown;
+        details.knownMines = s.knownMinesOf(k);
         if(remaining == 0)
         {
             for(int cell : unknown)
                 changed |= s.add(cell, false, TrainerDeduction::Kind::SatisfiedNumber,
-                                 {origin}, {remaining});
+                                 {origin}, {remaining}, QString(), details);
         }
         else if(remaining == unknown.size())
         {
             for(int cell : unknown)
                 changed |= s.add(cell, true, TrainerDeduction::Kind::FilledNumber,
-                                 {origin}, {remaining});
+                                 {origin}, {remaining}, QString(), details);
         }
     }
     return changed;
@@ -532,7 +553,8 @@ bool singlesPass(SolverState& s)
 
 bool pairsPass(SolverState& s)
 {
-    struct Pending { int cell; bool mine; int helper; int target; int rh; int rt; };
+    struct Pending { int cell; bool mine; int helper; int target; int rh; int rt;
+                     TrainerDeduction details; };
     QVector<Pending> pending;
 
     QVector<int> ua, ub;
@@ -560,23 +582,35 @@ bool pairsPass(SolverState& s)
             const int minShared = qMax(0, qMax(ra - static_cast<int>(aOnly.size()),
                                                rb - static_cast<int>(bOnly.size())));
 
+            QVector<int> knownMines = s.knownMinesOf(a);
+            for(int m : s.knownMinesOf(b))
+            {
+                if(!knownMines.contains(m))
+                    knownMines.append(m);
+            }
+
             // side: cells only next to "target"; "helper" is the other number
             auto conclude = [&](const QVector<int>& side, int rTarget, int rHelper,
                                 int target, int helper)
             {
                 if(side.isEmpty())
                     return;
+                TrainerDeduction details;
+                details.group = side;
+                details.region = ua + bOnly;
+                details.shared = shared;
+                details.knownMines = knownMines;
                 const int minSide = rTarget - maxShared;
                 const int maxSide = rTarget - minShared;
                 if(minSide == side.size())
                 {
                     for(int cell : side)
-                        pending.append({cell, true, helper, target, rHelper, rTarget});
+                        pending.append({cell, true, helper, target, rHelper, rTarget, details});
                 }
                 else if(maxSide == 0)
                 {
                     for(int cell : side)
-                        pending.append({cell, false, helper, target, rHelper, rTarget});
+                        pending.append({cell, false, helper, target, rHelper, rTarget, details});
                 }
             };
 
@@ -593,7 +627,7 @@ bool pairsPass(SolverState& s)
         const QString base = QStringLiteral("%1-%2").arg(p.rh).arg(p.rt);
         const QString name = s.lineName(p.helper, p.target, base);
         changed |= s.add(p.cell, p.mine, TrainerDeduction::Kind::Pattern,
-                         {p.helper, p.target}, {p.rh, p.rt}, name);
+                         {p.helper, p.target}, {p.rh, p.rt}, name, p.details);
     }
     return changed;
 }
@@ -673,6 +707,7 @@ void enumerationPass(SolverState& s)
         quint64 nodes = 0;
         bool aborted = false;
         bool anySolution = false;
+        int solutionCount = 0;
 
         std::function<void(int)> dfs = [&](int k)
         {
@@ -686,6 +721,7 @@ void enumerationPass(SolverState& s)
             if(k == n)
             {
                 anySolution = true;
+                ++solutionCount;
                 for(int j=0; j<n; ++j)
                 {
                     if(assign[j] == 1) canMine[j] = true;
@@ -723,13 +759,27 @@ void enumerationPass(SolverState& s)
         {
             if(canMine[j] && canSafe[j])
                 continue;
+            // All numbers of the component take part in the reasoning
             QVector<int> clues, clueRemaining;
-            for(int c : cellCons[j])
+            for(int c=0; c<cons.size(); ++c)
             {
                 clues.append(reduced[cons[c]].origin);
                 clueRemaining.append(reduced[cons[c]].remaining);
             }
-            s.add(cells[j], !canSafe[j], TrainerDeduction::Kind::Enumeration, clues, clueRemaining);
+            TrainerDeduction details;
+            details.region = cells;
+            details.solutions = solutionCount;
+            for(int c : cons)
+            {
+                const int k = s.byOrigin.value(reduced[c].origin);
+                for(int m : s.knownMinesOf(k))
+                {
+                    if(!details.knownMines.contains(m))
+                        details.knownMines.append(m);
+                }
+            }
+            s.add(cells[j], !canSafe[j], TrainerDeduction::Kind::Enumeration, clues, clueRemaining,
+                  QString(), details);
         }
     }
 }
@@ -762,6 +812,154 @@ QHash<int, TrainerDeduction> TrainerSolver::deduce(const TrainerBoard& board, bo
     }
 
     return s.known;
+}
+
+namespace
+{
+QString cellList(const QVector<int>& cells, int width)
+{
+    QStringList names;
+    for(int c : cells)
+        names.append(TrainerAnalyzer::cellName(c, width));
+    return names.join(", ");
+}
+
+QString mineCount(int n)
+{
+    return n == 1 ? QStringLiteral("1 mine") : QStringLiteral("%1 mines").arg(n);
+}
+
+QString cellCount(int n)
+{
+    return n == 1 ? QStringLiteral("1 cell") : QStringLiteral("%1 cells").arg(n);
+}
+
+// Cells of `cells` that touch `clue`
+QVector<int> touching(const TrainerBoard& b, int clue, const QVector<int>& cells)
+{
+    QVector<int> r;
+    const QVector<int> around = b.neighbours(clue);
+    for(int c : cells)
+    {
+        if(around.contains(c))
+            r.append(c);
+    }
+    return r;
+}
+
+QString knownPart(const TrainerBoard& b, int clue, const QVector<int>& knownMines)
+{
+    const QVector<int> mine = touching(b, clue, knownMines);
+    if(mine.isEmpty())
+        return QString();
+    return QStringLiteral(" (%1 already known at %2)").arg(mineCount(mine.size()), cellList(mine, b.width));
+}
+}
+
+QStringList TrainerSolver::explainSteps(const TrainerBoard& b, const TrainerDeduction& d)
+{
+    QStringList steps;
+    const int w = b.width;
+
+    switch(d.kind)
+    {
+        case TrainerDeduction::Kind::SatisfiedNumber:
+        {
+            const int clue = d.clues.value(0);
+            const int n = b.value[clue];
+            QVector<int> hidden;
+            for(int nb : b.neighbours(clue))
+            {
+                if(!b.revealed[nb])
+                    hidden.append(nb);
+            }
+            const QVector<int> mines = touching(b, clue, d.knownMines);
+            steps << QStringLiteral("The %1 at %2 needs %3 around it.")
+                     .arg(n).arg(TrainerAnalyzer::cellName(clue, w), mineCount(n));
+            steps << QStringLiteral("Its hidden neighbours are %1.").arg(cellList(hidden, w));
+            steps << QStringLiteral("%1 of them %2 already known to be %3: %4.")
+                     .arg(mines.size()).arg(mines.size() == 1 ? "is" : "are")
+                     .arg(mines.size() == 1 ? "a mine" : "mines", cellList(mines, w));
+            steps << QStringLiteral("That is all %1, so the remaining %2 (%3) %4 safe.")
+                     .arg(mineCount(n), cellCount(d.group.size()), cellList(d.group, w),
+                          d.group.size() == 1 ? "is" : "are");
+            break;
+        }
+        case TrainerDeduction::Kind::FilledNumber:
+        {
+            const int clue = d.clues.value(0);
+            const int r = d.clueRemaining.value(0);
+            steps << QStringLiteral("The %1 at %2 still needs %3%4.")
+                     .arg(b.value[clue]).arg(TrainerAnalyzer::cellName(clue, w), mineCount(r),
+                          knownPart(b, clue, d.knownMines));
+            steps << QStringLiteral("Only %1 around it %2 still unknown: %3.")
+                     .arg(cellCount(d.group.size()), d.group.size() == 1 ? "is" : "are",
+                          cellList(d.group, w));
+            steps << QStringLiteral("Every remaining mine has to go there, so %1 %2 %3.")
+                     .arg(cellList(d.group, w), d.group.size() == 1 ? "is" : "are",
+                          d.group.size() == 1 ? "a mine" : "mines");
+            break;
+        }
+        case TrainerDeduction::Kind::Pattern:
+        {
+            const int h = d.clues.value(0), t = d.clues.value(1);
+            const int rh = d.clueRemaining.value(0), rt = d.clueRemaining.value(1);
+            const QVector<int> hCells = touching(b, h, d.region);
+            const QVector<int> tCells = touching(b, t, d.region);
+            QVector<int> hOnly, tOnly;
+            for(int c : hCells) { if(!d.shared.contains(c)) hOnly.append(c); }
+            for(int c : tCells) { if(!d.shared.contains(c)) tOnly.append(c); }
+            const QString hName = QStringLiteral("the %1 at %2").arg(b.value[h]).arg(TrainerAnalyzer::cellName(h, w));
+            const QString tName = QStringLiteral("the %1 at %2").arg(b.value[t]).arg(TrainerAnalyzer::cellName(t, w));
+
+            steps << QStringLiteral("Compare two numbers: %1 and %2.").arg(hName, tName);
+            steps << QStringLiteral("%1 still needs %2%3 among %4.")
+                     .arg(hName.left(1).toUpper() + hName.mid(1), mineCount(rh),
+                          knownPart(b, h, d.knownMines), cellList(hCells, w));
+            steps << QStringLiteral("%1 still needs %2%3 among %4.")
+                     .arg(tName.left(1).toUpper() + tName.mid(1), mineCount(rt),
+                          knownPart(b, t, d.knownMines), cellList(tCells, w));
+            steps << QStringLiteral("They share %1: %2.").arg(cellCount(d.shared.size()), cellList(d.shared, w));
+            if(d.mine)
+            {
+                const int maxShared = qMin(qMin(rh, rt), static_cast<int>(d.shared.size()));
+                steps << QStringLiteral("Because of %1, the shared cells can hold at most %2.")
+                         .arg(hName, mineCount(maxShared));
+                steps << QStringLiteral("%1 needs %2, so at least %3 must be in its other %4 (%5).")
+                         .arg(tName.left(1).toUpper() + tName.mid(1), mineCount(rt),
+                              mineCount(rt - maxShared), cellCount(tOnly.size()), cellList(tOnly, w));
+                steps << QStringLiteral("There are exactly that many, so %1 %2 %3.")
+                         .arg(cellList(d.group, w), d.group.size() == 1 ? "is" : "are",
+                              d.group.size() == 1 ? "a mine" : "all mines");
+            }
+            else
+            {
+                const int minShared = qMax(0, rh - static_cast<int>(hOnly.size()));
+                steps << QStringLiteral("%1 can put at most %2 outside the shared cells, so the shared cells hold at least %3.")
+                         .arg(hName.left(1).toUpper() + hName.mid(1), mineCount(hOnly.size()),
+                              mineCount(minShared));
+                steps << QStringLiteral("That already gives %1 all %2 it needs, so its other %3 (%4) %5 safe.")
+                         .arg(tName, mineCount(rt), cellCount(tOnly.size()), cellList(tOnly, w),
+                              tOnly.size() == 1 ? "is" : "are");
+            }
+            if(d.pattern == QLatin1String("1-2-1"))
+                steps << QStringLiteral("Shortcut: in a 1-2-1 along a wall, the cells beside the 1s are mines and the cell beside the 2 is safe.");
+            else if(d.pattern == QLatin1String("1-2-2-1"))
+                steps << QStringLiteral("Shortcut: in a 1-2-2-1 along a wall, the cells beside the two 2s are mines and the cells beside the 1s are safe.");
+            break;
+        }
+        case TrainerDeduction::Kind::Enumeration:
+            steps << QStringLiteral("No single number or pair of numbers settles this, so look at all of them together: %1.")
+                     .arg(cellList(d.clues, w));
+            steps << QStringLiteral("Try every way of placing mines in the %1 unknown cells they touch.")
+                     .arg(d.region.size());
+            steps << QStringLiteral("%1 arrangement%2 fit every number, and in all of them %3 is %4.")
+                     .arg(d.solutions).arg(d.solutions == 1 ? "" : "s")
+                     .arg(TrainerAnalyzer::cellName(d.cell, w),
+                          d.mine ? QStringLiteral("a mine") : QStringLiteral("safe"));
+            break;
+    }
+    return steps;
 }
 
 QString TrainerSolver::kindName(TrainerDeduction::Kind kind)
@@ -973,6 +1171,8 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                     f.actionCell = cell;
                     f.suggestedCell = missed.cell;
                     f.clueCells = missed.clues;
+                    f.hasDeduction = true;
+                    f.deduction = missed;
                     f.cursorFromMs = prevT;
                     f.cursorToMs = a.tMs;
                     QString missedName;
@@ -1041,6 +1241,8 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                 f.actionCell = cell;
                 f.suggestedCell = nearest;
                 f.clueCells = ded.value(nearest).clues;
+                f.hasDeduction = true;
+                f.deduction = ded.value(nearest);
                 f.title = QStringLiteral("Guessed %1%2 while %3 was provably safe")
                           .arg(cellName(cell, board.width),
                                board.isMine(cell) ? QStringLiteral(" (a mine!)") : QString(),
@@ -1068,7 +1270,11 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                               .arg(cellName(cell, board.width));
                     ensureDeductions();
                     if(ded.contains(cell) && !ded.value(cell).mine)
+                    {
                         f.detail = describeDeduction(board, ded.value(cell));
+                        f.hasDeduction = true;
+                        f.deduction = ded.value(cell);
+                    }
                     else
                         f.detail = QStringLiteral("The flag was not justified by the visible numbers.");
                     f.clueCells = ded.value(cell).clues;

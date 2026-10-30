@@ -41,6 +41,7 @@
 #include <QByteArray>
 #include <QHash>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include "trainerrecording.h"
@@ -185,6 +186,11 @@ struct TrainerDeduction
     QString pattern;         ///< Pattern name such as "1-2-1" (Pattern kind only)
     QVector<int> clues;      ///< Revealed number cells used by the reasoning
     QVector<int> clueRemaining; ///< Mines still unaccounted for around each clue
+    QVector<int> group;      ///< Every cell proven by the same step (includes cell)
+    QVector<int> region;     ///< Unknown hidden cells the clues talk about
+    QVector<int> shared;     ///< Pattern: unknown cells next to both numbers
+    QVector<int> knownMines; ///< Hidden cells already known to be mines (subtracted from the numbers)
+    int solutions = 0;       ///< Enumeration: number of arrangements that fit
 };
 
 /**
@@ -211,6 +217,18 @@ public:
      * @brief Human readable name of a deduction kind
      */
     static QString kindName(TrainerDeduction::Kind kind);
+
+    /**
+     * @brief Step by step explanation of a deduction
+     *
+     * Plain text sentences that walk from the numbers to the conclusion,
+     * using "(column,row)" cell names.
+     *
+     * @param board Board state the deduction was made on
+     * @param d The deduction to explain
+     * @return One sentence per step
+     */
+    static QStringList explainSteps(const TrainerBoard& board, const TrainerDeduction& d);
 };
 
 /**
@@ -247,6 +265,8 @@ struct TrainerFinding
     QVector<int> clueCells;    ///< Numbers forming the missed pattern
     QVector<int> extraCells;   ///< Other cells to highlight (clicks in a run, chord area)
     int wastedClicks = 0;  ///< Clicks that a better play would have saved
+    bool hasDeduction = false;    ///< deduction below is set
+    TrainerDeduction deduction;   ///< The logic behind the finding (missed pattern, safe cell)
     qint64 cursorFromMs = -1;  ///< Start of the cursor path to draw
     qint64 cursorToMs = -1;    ///< End of the cursor path to draw
 

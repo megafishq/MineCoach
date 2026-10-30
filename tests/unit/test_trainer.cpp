@@ -57,6 +57,8 @@ private slots:
     void testFilledNumber();
     void testEnumerationFindsHarderCells();
     void testDeductionsAreSoundOnRandomBoards();
+    void testDeductionDetailsAndExplanation();
+    void testFindingCarriesDeduction();
     void testCursorJumpPointsAtMissedCell();
     void testShortMoveIsNotAJump();
     void testClicksCouldBeChord();
@@ -224,6 +226,69 @@ void TestTrainer::testDeductionsAreSoundOnRandomBoards()
     }
     QVERIFY(patterns > 0);
     QVERIFY(enumerationOnly > 0);
+}
+
+void TestTrainer::testDeductionDetailsAndExplanation()
+{
+    TrainerRecording r = TrainerRecording::fromMinefieldString(
+        ".*.*.\n"
+        ".....\n"
+        ".....\n");
+    TrainerBoard b(r);
+    b.reveal(b.index(2, 2));
+
+    const QHash<int, TrainerDeduction> d = TrainerSolver::deduce(b, false);
+    const TrainerDeduction mine = d.value(b.index(3, 0));
+    QCOMPARE(mine.kind, TrainerDeduction::Kind::Pattern);
+    QVERIFY(mine.group.contains(b.index(3, 0)));
+    QVERIFY(!mine.shared.isEmpty());
+    for(int c : mine.shared)
+        QVERIFY(mine.region.contains(c));
+    for(int c : mine.group)
+        QVERIFY(!mine.shared.contains(c));
+
+    const QStringList steps = TrainerSolver::explainSteps(b, mine);
+    QVERIFY(steps.size() >= 5);
+    QVERIFY(steps.join(' ').contains("(4,1)"));      // the proven cell is named
+    QVERIFY(steps.join(' ').contains("a mine"));
+
+    // Every kind produces an explanation
+    for(auto it = d.constBegin(); it != d.constEnd(); ++it)
+        QVERIFY(!TrainerSolver::explainSteps(b, it.value()).isEmpty());
+
+    // Satisfied number: the known mines are recorded
+    // (0,1) has only (0,0) hidden -> mine; then (1,0) is satisfied -> (2,0) safe
+    TrainerRecording r2 = TrainerRecording::fromMinefieldString(
+        "*..\n"
+        "...\n");
+    TrainerBoard b2(r2);
+    b2.reveal(b2.index(1, 0));
+    b2.reveal(b2.index(0, 1));
+    b2.reveal(b2.index(1, 1));
+    const QHash<int, TrainerDeduction> d2 = TrainerSolver::deduce(b2, false);
+    QVERIFY(d2.value(0).mine);
+    QCOMPARE(d2.value(0).kind, TrainerDeduction::Kind::FilledNumber);
+    const TrainerDeduction safe = d2.value(b2.index(2, 0));
+    QVERIFY(!safe.mine);
+    QCOMPARE(safe.kind, TrainerDeduction::Kind::SatisfiedNumber);
+    QVERIFY(safe.knownMines.contains(0));
+}
+
+void TestTrainer::testFindingCarriesDeduction()
+{
+    TrainerRecording r = TrainerRecording::fromMinefieldString(
+        ".*.*.....*.*\n"
+        "............\n"
+        "............\n");
+    act(r, TrainerAction::Type::Reveal, 2, 2, 0);
+    act(r, TrainerAction::Type::Reveal, 10, 0, 1500);
+
+    const TrainerReport rep = TrainerAnalyzer::analyze(r);
+    const QVector<TrainerFinding> jumps = findingsOf(rep, TrainerFinding::Type::CursorJump);
+    QCOMPARE(jumps.size(), 1);
+    QVERIFY(jumps.first().hasDeduction);
+    QCOMPARE(jumps.first().deduction.cell, jumps.first().suggestedCell);
+    QVERIFY(!jumps.first().deduction.group.isEmpty());
 }
 
 void TestTrainer::testCursorJumpPointsAtMissedCell()
