@@ -1214,21 +1214,16 @@ bool pickMissedNear(const TrainerBoard& b, const QHash<int, TrainerDeduction>& d
     for(auto it = ded.constBegin(); it != ded.constEnd(); ++it)
     {
         const TrainerDeduction& d = it.value();
-        if(b.revealed[d.cell] || d.cell == target)
-            continue;
-        // A proven mine that is already flagged is not unfinished work
-        if(d.mine && b.marks[d.cell] == TrainerBoard::Mark::Flag)
-            continue;
-        if(!d.mine && b.marks[d.cell] != TrainerBoard::Mark::None)
+        // Only safe cells are unfinished work: a mine never has to be clicked
+        if(d.mine || b.revealed[d.cell] || d.cell == target ||
+           b.marks[d.cell] != TrainerBoard::Mark::None)
             continue;
         const double dist = euclid(b, from, d.cell);
         if(dist > radius || dist >= targetDist)
             continue;
 
         bool better = !found;
-        if(!better && d.mine != best.mine)
-            better = !d.mine;                     // safe cells first
-        else if(!better && d.kind != best.kind)
+        if(!better && d.kind != best.kind)
             better = d.kind < best.kind;          // simplest reasoning first
         else if(!better)
             better = dist < bestDist;
@@ -1310,7 +1305,7 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                     TrainerFinding f;
                     f.type = TrainerFinding::Type::CursorJump;
                     f.actionIndex = i;
-                    f.severity = missed.mine ? 1 : 2;
+                    f.severity = 2;
                     f.fromCell = prevCell;
                     f.actionCell = cell;
                     f.suggestedCell = missed.cell;

@@ -295,6 +295,7 @@ void TestTrainer::testFindingCarriesDeduction()
     const QVector<TrainerFinding> jumps = findingsOf(rep, TrainerFinding::Type::CursorJump);
     QCOMPARE(jumps.size(), 1);
     QVERIFY(jumps.first().hasDeduction);
+    QVERIFY(!jumps.first().deduction.mine); // jumps only ever point at safe cells
     QCOMPARE(jumps.first().deduction.cell, jumps.first().suggestedCell);
     QVERIFY(!jumps.first().deduction.group.isEmpty());
 }
