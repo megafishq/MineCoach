@@ -83,16 +83,35 @@ void QLabel_adapted::setPixmapNormal()
     }
 }
 
+bool QLabel_adapted::bPressFeedback = true;
+
+void QLabel_adapted::setPressFeedbackEnabled(bool enabled)
+{
+    bPressFeedback = enabled;
+}
+
+void QLabel_adapted::showTemporaryPixmap(const QPixmap& pxmap)
+{
+    setPixmap(pxmap);
+}
+
+void QLabel_adapted::restorePixmap()
+{
+    setPixmap(isInverted ? invertedPixmap : normalPixmap);
+}
+
 void QLabel_adapted::mouseReleaseEvent(QMouseEvent *e)
 {
-    setPixmapNormal();
+    if(bPressFeedback)
+        setPixmapNormal();
 
     Q_EMIT SIGNAL_released(e);
 }
 
 void QLabel_adapted::mousePressEvent(QMouseEvent *e)
 {
-    setPixmapInverted();
+    if(bPressFeedback)
+        setPixmapInverted();
 
     Q_EMIT SIGNAL_clicked(e);
 }

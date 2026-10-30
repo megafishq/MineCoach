@@ -110,6 +110,28 @@ public:
      */
     void setPixmapNormal();
 
+    /**
+     * @brief Show a pixmap temporarily without replacing the cached one
+     *
+     * Used for the Arbiter style pressed-cell look while a mouse button is
+     * held. restorePixmap() brings back the cached pixmap.
+     *
+     * @param pxmap Pixmap to display until restorePixmap() is called
+     */
+    void showTemporaryPixmap(const QPixmap& pxmap);
+
+    /**
+     * @brief Restore the cached pixmap after showTemporaryPixmap()
+     */
+    void restorePixmap();
+
+    /**
+     * @brief Enable or disable the inverted flash on mouse press for all cells
+     *
+     * @param enabled true to invert the pressed cell (classic LibreMines look)
+     */
+    static void setPressFeedbackEnabled(bool enabled);
+
 protected:
     /**
      * @brief Handle mouse release events
@@ -138,6 +160,7 @@ private:
     QPixmap normalPixmap;    ///< Normal pixmap state for the label
     QPixmap invertedPixmap;  ///< Pre-computed inverted pixmap for visual feedback
     bool isInverted = false; ///< Current state tracking for proper pixmap management
+    static bool bPressFeedback; ///< Invert the cell on mouse press
 
 Q_SIGNALS:
     /**

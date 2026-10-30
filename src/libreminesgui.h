@@ -205,6 +205,8 @@ private:
     void vArbiterPress(const QMouseEvent* const e);
     void vArbiterRelease(const QMouseEvent* const e);
     bool bCellUnderCursor(const QMouseEvent* const e, uchar& x, uchar& y) const;
+    void vUpdatePressedCells(const QMouseEvent* const e);
+    void vClearPressedCells();
 
 private Q_SLOTS:
     /**
@@ -383,6 +385,7 @@ private:
 
     bool bChordPending = false;       ///< Both buttons (or middle) are down: next release chords
     bool bChordDone = false;          ///< The pending chord already fired
+    QVector<QPair<uchar, uchar>> pressedCells; ///< Cells drawn pressed while a button is held
     bool bAutoRestartPending = false; ///< The lost game will be restarted automatically
     QString trainerStatsText;         ///< Arbiter style statistics of the last game
 

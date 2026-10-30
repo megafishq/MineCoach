@@ -187,6 +187,14 @@ bool LibreMinesGui::eventFilter(QObject* object, QEvent* event)
         return true;
     }
 
+    // Arbiter style: the pressed cell (or 3x3 chord area) follows the cursor
+    if(event->type() == QEvent::MouseMove && bArbiterInput &&
+       object->parent() == widgetBoardContents)
+    {
+        vUpdatePressedCells(static_cast<QMouseEvent*>(event));
+        return false;
+    }
+
     // Just handle those two events
     if(event->type() != QEvent::KeyPress &&
        event->type() != QEvent::KeyRelease)
@@ -251,6 +259,8 @@ void LibreMinesGui::vNewGame(const uchar _X,
     bAutoRestartPending = false;
     bChordPending = false;
     bChordDone = false;
+    pressedCells.clear();
+    QLabel_adapted::setPressFeedbackEnabled(!bArbiterInput);
 
     // Reuse the cell widgets when the board size did not change: creating
     // hundreds of widgets is what makes restarts slow
@@ -1699,6 +1709,7 @@ void LibreMinesGui::vFinishTrainerRecording(const bool won)
         }
     }
 
+    vClearPressedCells();
     trainerStatsText.clear();
     if(!trainerRecorder.isRecording())
         return;
@@ -1810,15 +1821,28 @@ bool LibreMinesGui::bCellUnderCursor(const QMouseEvent* const e, uchar& x, uchar
 
 void LibreMinesGui::vArbiterPress(const QMouseEvent* const e)
 {
+    const Qt::MouseButtons held = e->buttons();
+
+    // A press with no other button held starts a new gesture. The release
+    // that should have ended the previous one can be lost (for example when
+    // the pressed cell is revealed and hidden mid-gesture), so never let an
+    // old chord leak into this one.
+    if(held == e->button())
+    {
+        bChordPending = false;
+        bChordDone = false;
+    }
+
     if(!gameEngine || !gameEngine->isGameActive() || controller.isActive())
         return;
 
-    const Qt::MouseButtons held = e->buttons();
     if(((held & Qt::LeftButton) && (held & Qt::RightButton)) || e->button() == Qt::MiddleButton)
     {
         // Both buttons (or the middle one): chord when a button is released
         bChordPending = true;
+        bChordDone = false;
         updateFaceReaction(FacesReaction::UNHIDDEN_CELL_PRESSED);
+        vUpdatePressedCells(e);
         return;
     }
 
@@ -1832,12 +1856,63 @@ void LibreMinesGui::vArbiterPress(const QMouseEvent* const e)
     }
 
     if(e->button() == Qt::LeftButton)
+    {
         updateFaceReaction(FacesReaction::HIDDEN_CELL_PRESSED);
+        vUpdatePressedCells(e);
+    }
+}
+
+void LibreMinesGui::vClearPressedCells()
+{
+    for(const QPair<uchar, uchar>& c : pressedCells)
+    {
+        if(c.first < principalMatrix.size() && c.second < principalMatrix[c.first].size() &&
+           principalMatrix[c.first][c.second].button)
+            principalMatrix[c.first][c.second].button->restorePixmap();
+    }
+    pressedCells.clear();
+}
+
+void LibreMinesGui::vUpdatePressedCells(const QMouseEvent* const e)
+{
+    QVector<QPair<uchar, uchar>> wanted;
+
+    const Qt::MouseButtons held = e->buttons();
+    const bool chord = bChordPending && !bChordDone;
+    uchar x, y;
+    if(gameEngine && gameEngine->isGameActive() && !controller.isActive() &&
+       (chord || held == Qt::LeftButton) && bCellUnderCursor(e, x, y))
+    {
+        const int r = chord ? 1 : 0;
+        for(int i = x - r; i <= x + r; ++i)
+        {
+            for(int j = y - r; j <= y + r; ++j)
+            {
+                if(i < 0 || j < 0 || i >= static_cast<int>(principalMatrix.size()) ||
+                   j >= static_cast<int>(principalMatrix[0].size()))
+                    continue;
+                const LibreMinesGameEngine::CellGameEngine& cell = gameEngine->getPrincipalMatrix()[i][j];
+                if(cell.isHidden && cell.flagState == FlagState::NoFlag)
+                    wanted.append(qMakePair(static_cast<uchar>(i), static_cast<uchar>(j)));
+            }
+        }
+    }
+
+    if(wanted == pressedCells)
+        return;
+
+    vClearPressedCells();
+    const QPixmap& pressed = fieldTheme.getPixmapFromCellValue(CellValue::ZERO);
+    for(const QPair<uchar, uchar>& c : wanted)
+        principalMatrix[c.first][c.second].button->showTemporaryPixmap(pressed);
+    pressedCells = wanted;
 }
 
 void LibreMinesGui::vArbiterRelease(const QMouseEvent* const e)
 {
     const bool allReleased = e->buttons() == Qt::NoButton;
+
+    vClearPressedCells();
 
     if(!gameEngine || !gameEngine->isGameActive() || controller.isActive())
     {
