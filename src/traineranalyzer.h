@@ -260,6 +260,24 @@ public:
     static QHash<int, TrainerDeduction> deduceImpl(const TrainerBoard& board, bool useEnumeration,
                                                    int center, int radius, const QRect& area);
 
+    /**
+     * @brief Is one specific cell provably safe? (targeted, stronger check)
+     *
+     * deduce() skips very large groups of numbers to stay fast. This check
+     * looks only at the numbers around `cell`, grows the area as far as an
+     * exhaustive search stays affordable, and in the endgame also uses the
+     * number of mines left. Leaving numbers out only makes it more cautious,
+     * so a "safe" answer is always correct.
+     *
+     * @param board Board state
+     * @param cell Cell to check
+     * @param area Only numbers inside this area may be used (null = whole board)
+     * @param proof Filled with the reasoning when the cell is safe
+     * @return true if the cell is certainly safe
+     */
+    static bool proveSafe(const TrainerBoard& board, int cell, const QRect& area = QRect(),
+                          TrainerDeduction* proof = nullptr);
+
     static QVector<TrainerDeduction> prerequisitesOf(const QHash<int, TrainerDeduction>& all,
                                                      const TrainerDeduction& d);
 };

@@ -495,6 +495,28 @@ void TestTrainer::testSpeedPuzzlesAreValid()
         QVERIFY(!boom);
         QCOMPARE(int(opens.size()) > 0, true);
     }
+    // Any cell the visible numbers prove safe must be accepted as an answer,
+    // including cells that need the numbers in the outer ring of the view
+    TrainerSpeed again(777);
+    for(int i=0; i<20; ++i)
+    {
+        TrainerSpeedPosition pos;
+        TrainerPuzzle p;
+        QVERIFY(again.nextSafePuzzle(pos, p));
+        TrainerBoard b(pos.recording);
+        b.restore(p.snapshot);
+        const QHash<int, TrainerDeduction> visible = TrainerSolver::deduceInArea(b, p.view);
+        for(auto it = visible.constBegin(); it != visible.constEnd(); ++it)
+        {
+            const int c = it.key();
+            if(it->mine || b.revealed[c] || b.marks[c] != TrainerBoard::Mark::None ||
+               !p.view.contains(b.xOf(c), b.yOf(c)))
+                continue;
+            QString why;
+            QVERIFY2(TrainerHistory::checkAnswer(pos.recording, p, c, &why), qPrintable(why));
+        }
+    }
+
     // 30 puzzles must be quick enough for a live sprint
     qDebug() << "speed puzzle generation:" << clock.elapsed() << "ms for 30 puzzles";
     QVERIFY(clock.elapsed() < 30000);

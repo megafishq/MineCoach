@@ -412,14 +412,20 @@ bool TrainerHistory::checkAnswer(const TrainerRecording& recording, const Traine
             say(QStringLiteral("%1 is flagged. Click an unflagged hidden cell.").arg(name));
             return false;
         }
-        const QHash<int, TrainerDeduction> inArea = TrainerSolver::deduceInArea(board, puzzle.area);
-        if(inArea.contains(cell) && !inArea.value(cell).mine)
+        // Every number the player can see counts, not just the inner area
+        const QRect shownArea = puzzle.view.isNull() ? puzzle.area : puzzle.view;
+        const QHash<int, TrainerDeduction> inArea = TrainerSolver::deduceInArea(board, shownArea);
+        TrainerDeduction proof;
+        const bool provable = (inArea.contains(cell) && !inArea.value(cell).mine) ||
+                              (!inArea.contains(cell) && TrainerSolver::proveSafe(board, cell, shownArea, &proof));
+        if(provable)
         {
             if(puzzle.deduction.group.contains(cell))
                 say(QStringLiteral("Correct, %1 is safe.").arg(name));
             else
                 say(QStringLiteral("Correct, %1 is safe too (%2). The pattern this puzzle trains is shown below.")
-                    .arg(name, TrainerSolver::kindName(inArea.value(cell).kind)));
+                    .arg(name, TrainerSolver::kindName(inArea.contains(cell) ? inArea.value(cell).kind
+                                                                              : proof.kind)));
             return true;
         }
         if(board.isMine(cell))

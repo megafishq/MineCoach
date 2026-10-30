@@ -899,6 +899,215 @@ QHash<int, TrainerDeduction> TrainerSolver::deduceImpl(const TrainerBoard& board
     return seeded.known;
 }
 
+namespace
+{
+// Exhaustive search over a small set of unknown cells.
+// Returns 1 if some arrangement satisfies every constraint with cells[forced]
+// set to `value`, 0 if none does, -1 if the node budget ran out.
+struct ExactProblem
+{
+    QVector<int> cells;                 // unknown cells (variables)
+    QVector<QVector<int>> cons;         // constraint -> variable indices
+    QVector<int> need;                  // constraint -> mines required
+};
+
+int existsArrangement(const ExactProblem& pb, int forced, int value, quint64 budget)
+{
+    const int n = pb.cells.size();
+    QVector<QVector<int>> varCons(n);
+    for(int c = 0; c < pb.cons.size(); ++c)
+        for(int v : pb.cons[c])
+            varCons[v].append(c);
+
+    QVector<int> mines(pb.cons.size(), 0), open(pb.cons.size(), 0);
+    for(int c = 0; c < pb.cons.size(); ++c)
+        open[c] = pb.cons[c].size();
+
+    // Variables in order, the forced one first so it prunes early
+    QVector<int> order{forced};
+    for(int v = 0; v < n; ++v)
+        if(v != forced)
+            order.append(v);
+
+    quint64 nodes = 0;
+    bool outOfBudget = false;
+    std::function<bool(int)> dfs = [&](int k) -> bool
+    {
+        if(++nodes > budget)
+        {
+            outOfBudget = true;
+            return false;
+        }
+        if(k == n)
+            return true;
+        const int v = order[k];
+        for(int val = 0; val <= 1; ++val)
+        {
+            if(v == forced && val != value)
+                continue;
+            bool ok = true;
+            for(int c : varCons[v])
+            {
+                mines[c] += val;
+                open[c] -= 1;
+                if(mines[c] > pb.need[c] || mines[c] + open[c] < pb.need[c])
+                    ok = false;
+            }
+            const bool found = ok && dfs(k + 1);
+            for(int c : varCons[v])
+            {
+                mines[c] -= val;
+                open[c] += 1;
+            }
+            if(found)
+                return true;
+            if(outOfBudget)
+                return false;
+        }
+        return false;
+    };
+    const bool found = dfs(0);
+    if(outOfBudget)
+        return -1;
+    return found ? 1 : 0;
+}
+}
+
+bool TrainerSolver::proveSafe(const TrainerBoard& board, int cell, const QRect& area, TrainerDeduction* proof)
+{
+    if(cell < 0 || cell >= board.value.size() || board.revealed[cell])
+        return false;
+
+    const QHash<int, TrainerDeduction> known = area.isNull() ? deduce(board) : deduceInArea(board, area);
+    if(known.contains(cell))
+    {
+        if(proof)
+            *proof = known.value(cell);
+        return !known.value(cell).mine;
+    }
+
+    const int x0 = board.xOf(cell), y0 = board.yOf(cell);
+    const quint64 Budget = 1000000;
+
+    // Numbers within `radius` of the cell; growing the radius adds information
+    for(int radius = 1; radius <= 8; ++radius)
+    {
+        ExactProblem pb;
+        QHash<int, int> var;
+        QVector<int> origins, originNeed;
+        for(int y = qMax(0, y0 - radius); y <= qMin(board.height - 1, y0 + radius); ++y)
+        {
+            for(int x = qMax(0, x0 - radius); x <= qMin(board.width - 1, x0 + radius); ++x)
+            {
+                const int c = board.index(x, y);
+                if(!board.revealed[c] || board.value[c] <= 0)
+                    continue;
+                if(!area.isNull() && !area.contains(x, y))
+                    continue;
+                int need = board.value[c];
+                QVector<int> vars;
+                for(int nb : board.neighbours(c))
+                {
+                    if(board.revealed[nb])
+                        continue;
+                    auto it = known.constFind(nb);
+                    if(it != known.constEnd())
+                    {
+                        if(it->mine)
+                            --need;
+                        continue;
+                    }
+                    if(!var.contains(nb))
+                    {
+                        var.insert(nb, pb.cells.size());
+                        pb.cells.append(nb);
+                    }
+                    vars.append(var.value(nb));
+                }
+                if(vars.isEmpty())
+                    continue;
+                pb.cons.append(vars);
+                pb.need.append(need);
+                origins.append(c);
+                originNeed.append(need);
+            }
+        }
+        if(!var.contains(cell))
+            continue;          // no number touches the cell yet
+        if(pb.cells.size() > 48)
+            break;             // too big to search exhaustively
+
+        // Endgame: the number of mines left is information the player has too
+        bool usedMineCount = false;
+        if(area.isNull())
+        {
+            QVector<int> unknownHidden;
+            int knownMines = 0;
+            for(int c = 0; c < board.value.size(); ++c)
+            {
+                if(board.revealed[c])
+                    continue;
+                auto it = known.constFind(c);
+                if(it != known.constEnd())
+                {
+                    if(it->mine)
+                        ++knownMines;
+                    continue;
+                }
+                unknownHidden.append(c);
+            }
+            int totalMines = 0;
+            for(int c = 0; c < board.value.size(); ++c)
+                if(board.isMine(c))
+                    ++totalMines;
+            if(unknownHidden.size() <= 24 && unknownHidden.size() >= pb.cells.size())
+            {
+                QVector<int> vars;
+                for(int c : unknownHidden)
+                {
+                    if(!var.contains(c))
+                    {
+                        var.insert(c, pb.cells.size());
+                        pb.cells.append(c);
+                    }
+                    vars.append(var.value(c));
+                }
+                pb.cons.append(vars);
+                pb.need.append(totalMines - knownMines);
+                usedMineCount = true;
+            }
+        }
+
+        const int asMine = existsArrangement(pb, var.value(cell), 1, Budget);
+        if(asMine != 0)
+        {
+            if(asMine < 0)
+                break;         // could not decide within the budget
+            continue;          // a mine is still possible: look further out
+        }
+        if(existsArrangement(pb, var.value(cell), 0, Budget) != 1)
+            break;             // inconsistent or undecided: do not claim anything
+
+        if(proof)
+        {
+            TrainerDeduction d;
+            d.cell = cell;
+            d.mine = false;
+            d.kind = TrainerDeduction::Kind::Enumeration;
+            d.clues = origins;
+            d.clueRemaining = originNeed;
+            d.region = pb.cells;
+            d.group = {cell};
+            d.solutions = 0;
+            d.depth = 1;
+            d.pattern = usedMineCount ? QStringLiteral("mine count") : QString();
+            *proof = d;
+        }
+        return true;
+    }
+    return false;
+}
+
 QVector<TrainerDeduction> TrainerSolver::prerequisitesOf(const QHash<int, TrainerDeduction>& all,
                                                          const TrainerDeduction& d)
 {
@@ -1114,10 +1323,17 @@ QStringList TrainerSolver::explainSteps(const TrainerBoard& b, const TrainerDedu
                      .arg(cellList(d.clues, w));
             steps << QStringLiteral("Try every way of placing mines in the %1 unknown cells they touch.")
                      .arg(d.region.size());
-            steps << QStringLiteral("%1 arrangement%2 fit every number, and in all of them %3 is %4.")
-                     .arg(d.solutions).arg(d.solutions == 1 ? "" : "s")
-                     .arg(TrainerAnalyzer::cellName(d.cell, w),
-                          d.mine ? QStringLiteral("a mine") : QStringLiteral("safe"));
+            if(d.pattern == QLatin1String("mine count"))
+                steps << QStringLiteral("Also use how many mines are left on the whole board.");
+            if(d.solutions > 0)
+                steps << QStringLiteral("%1 arrangement%2 fit every number, and in all of them %3 is %4.")
+                         .arg(d.solutions).arg(d.solutions == 1 ? "" : "s")
+                         .arg(TrainerAnalyzer::cellName(d.cell, w),
+                              d.mine ? QStringLiteral("a mine") : QStringLiteral("safe"));
+            else
+                steps << QStringLiteral("No arrangement that fits the numbers puts a mine on %1, so it is %2.")
+                         .arg(TrainerAnalyzer::cellName(d.cell, w),
+                              d.mine ? QStringLiteral("a mine") : QStringLiteral("safe"));
             break;
     }
     return steps;
@@ -1370,7 +1586,8 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                     break; // first click is always a guess
 
                 ensureDeductions();
-                const bool provenSafe = ded.contains(cell) && !ded.value(cell).mine;
+                const bool provenSafe = (ded.contains(cell) && !ded.value(cell).mine) ||
+                                        (!ded.contains(cell) && TrainerSolver::proveSafe(board, cell));
                 if(provenSafe)
                     break;
 
