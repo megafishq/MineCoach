@@ -1360,7 +1360,7 @@ QString TrainerReport::toText(const TrainerRecording& recording) const
 {
     QString out;
     QTextStream ts(&out);
-    ts << "LibreMines Trainer report\n";
+    ts << "MineCoach report\n";
     ts << QString("Board %1x%2, %3 mines - %4\n")
           .arg(recording.width).arg(recording.height).arg(recording.mines)
           .arg(recording.won ? QStringLiteral("won") : QStringLiteral("lost"));

@@ -250,7 +250,7 @@ TrainerAnalysisDialog::TrainerAnalysisDialog(const TrainerRecording& recording, 
     rec(recording),
     report(TrainerAnalyzer::analyze(recording))
 {
-    setWindowTitle(tr("Game Analysis - LibreMines Trainer"));
+    setWindowTitle(tr("Game Analysis - MineCoach"));
     setWindowFlags(windowFlags() | Qt::WindowMaximizeButtonHint);
     resize(1180, 720);
 

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=MineCoach
+Comment=Minesweeper trainer that analyses your games (based on LibreMines)
+Icon=minecoach
+Terminal=false
+Type=Application
+Categories=Game;LogicGame
+Keywords=Minesweeper;mines;trainer;arbiter
+Exec=minecoach
+Version=1.0
+StartupNotify=true
+StartupWMClass=minecoach

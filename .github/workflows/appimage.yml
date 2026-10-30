@@ -54,7 +54,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install build-essential cmake libgl1-mesa-dev fuse libfuse2
       
-      - name: "Build LibreMines Qt 6.8.3"
+      - name: "Build MineCoach Qt 6.8.3"
         if: matrix.qt-version == '6.8.3'
         run: |
           mkdir build && cd build
@@ -65,7 +65,7 @@ jobs:
           fi
           make -j$(nproc)
 
-      - name: "Build LibreMines Qt 5.15.2"
+      - name: "Build MineCoach Qt 5.15.2"
         if: matrix.qt-version == '5.15.2'
         run: |
           mkdir build && cd build
@@ -96,7 +96,7 @@ jobs:
           path: build/test-results/*.xml
           retention-days: 7
 
-      - name: Install LibreMines
+      - name: Install MineCoach
         run: |
           cd build
           make install DESTDIR=AppDir
@@ -138,15 +138,15 @@ jobs:
         run: |
           cd build
           if [ "${{ matrix.qt-version }}" = "5.15.2" ]; then
-            mv *.AppImage "LibreMines-${{ inputs.version }}-qt5-x86_64.AppImage"
+            mv *.AppImage "MineCoach-${{ inputs.version }}-qt5-x86_64.AppImage"
           else
-            mv *.AppImage "LibreMines-${{ inputs.version }}-qt6-x86_64.AppImage"
+            mv *.AppImage "MineCoach-${{ inputs.version }}-qt6-x86_64.AppImage"
           fi
       
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: LibreMines-AppImage-qt-${{ matrix.qt-version }}-x86_64
+          name: MineCoach-AppImage-qt-${{ matrix.qt-version }}-x86_64
           path: build/*.AppImage
           
       - name: Upload to Release

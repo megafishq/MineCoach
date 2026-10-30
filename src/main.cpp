@@ -1,6 +1,7 @@
 /*****************************************************************************
  * LibreMines                                                                *
  * Copyright (C) 2020-2026  Bruno Bollos Correa                              *
+ * Modified in 2026 by MineCoach contributors (fork of LibreMines)          *
  *                                                                           *
  * This program is free software: you can redistribute it and/or modify      *
  * it under the terms of the GNU General Public License as published by      *
@@ -170,6 +171,39 @@ InitializeOptions getOptions(const QStringList& args)
     return ops;
 }
 
+// MineCoach keeps its data under its own name. On the first launch, copy the
+//  settings, scores and trainer recordings written by LibreMines (or by earlier
+//  builds of this fork) so nothing is lost after the rename.
+void importDataFromLibreMines()
+{
+    const QDir newDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation));
+    QDir oldDir(newDir);
+    if(!oldDir.cdUp() || !oldDir.cd("libremines") ||
+       oldDir.absolutePath() == newDir.absolutePath() || newDir.exists())
+    {
+        return;
+    }
+
+    QDir().mkpath(newDir.absolutePath());
+    for(const QString& name : {QString("libreminesLastSession.txt"), QString("scoresLibreMines"),
+                               QString("libreminesDefaultLanguage.txt"), QString("trainer.ini")})
+    {
+        if(oldDir.exists(name))
+            QFile::copy(oldDir.absoluteFilePath(name), newDir.absoluteFilePath(name));
+    }
+
+    QDir oldRecordings(oldDir.absoluteFilePath("trainer_recordings"));
+    if(oldRecordings.exists())
+    {
+        QDir().mkpath(newDir.absoluteFilePath("trainer_recordings"));
+        for(const QString& file : oldRecordings.entryList(QDir::Files))
+        {
+            QFile::copy(oldRecordings.absoluteFilePath(file),
+                        newDir.absoluteFilePath("trainer_recordings/" + file));
+        }
+    }
+}
+
 void loadLanguagePreference()
 {
     QDir destDir = QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation));
@@ -262,6 +296,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    importDataFromLibreMines();
     autoImportScoresAndSettingsFromLocalShare();
 
     loadLanguagePreference();

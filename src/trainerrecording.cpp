@@ -112,7 +112,7 @@ bool TrainerRecording::fromJson(const QJsonObject& json, TrainerRecording& out, 
 {
     if(json.value("format").toString() != QLatin1String("libremines-trainer"))
     {
-        setError(error, QStringLiteral("Not a LibreMines Trainer recording"));
+        setError(error, QStringLiteral("Not a MineCoach recording"));
         return false;
     }
 

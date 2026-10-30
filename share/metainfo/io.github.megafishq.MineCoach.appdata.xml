@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.Bollos00.LibreMines</id>
+  <id>io.github.megafishq.MineCoach</id>
   <metadata_license>CC-BY-SA-4.0</metadata_license>
   <project_license>GPL-3.0+</project_license>
-  <name>LibreMines</name>
-  <summary>A Free/Libre and Open Source Software Qt based Minesweeper game</summary>
+  <name>MineCoach</name>
+  <summary>Minesweeper trainer that records and analyses your games</summary>
   
   <description>
     <p>
-      LibreMines is a Free/Libre and Open Source Qt based Minesweeper game available for 
-      GNU/Linux, FreeBSD, macOS and Windows systems.
+      MineCoach is a Minesweeper trainer based on LibreMines by Bruno Bollos Correa. It records every game and points out cursor jumps that left a provable cell behind, missed patterns (1-1, 1-2, 1-2-1, 1-2-2-1) and better squares to chord on.
     </p>
     <p>
       The game includes classic minesweeper gameplay with modern enhancements such as:

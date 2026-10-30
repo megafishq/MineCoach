@@ -17,13 +17,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"  // US English, Unicode
         BEGIN
-            VALUE "CompanyName",      "Bruno Bollos Correa"
-            VALUE "FileDescription",  "LibreMines - A Free/Libre Minesweeper Game"
+            VALUE "CompanyName",      "MineCoach contributors"
+            VALUE "FileDescription",  "MineCoach - Minesweeper trainer (based on LibreMines)"
             VALUE "FileVersion",      "@PROJECT_VERSION@.0"
             VALUE "InternalName",     "@PROJECT_NAME@"
-            VALUE "LegalCopyright",   "Copyright (C) 2020-2026 Bruno Bollos Correa"
+            VALUE "LegalCopyright",   "Copyright (C) 2020-2026 Bruno Bollos Correa; 2026 MineCoach contributors. GPL-3.0-or-later"
             VALUE "OriginalFilename", "@PROJECT_NAME@.exe"
-            VALUE "ProductName",      "LibreMines"
+            VALUE "ProductName",      "MineCoach"
             VALUE "ProductVersion",   "@PROJECT_VERSION@"
         END
     END

@@ -1,6 +1,7 @@
 /*****************************************************************************
  * LibreMines                                                                *
  * Copyright (C) 2020-2026  Bruno Bollos Correa                              *
+ * Modified in 2026 by MineCoach contributors (fork of LibreMines)          *
  *                                                                           *
  * This program is free software: you can redistribute it and/or modify      *
  * it under the terms of the GNU General Public License as published by      *
@@ -100,7 +101,7 @@ LibreMinesGui::LibreMinesGui(QWidget *parent, const int thatWidth, const int tha
     qApp->installEventFilter(this);
 
     this->setWindowIcon(QIcon(":/icons_rsc/icons/libremines.svg"));
-    this->setWindowTitle("LibreMines Trainer");
+    this->setWindowTitle("MineCoach");
 
     vLoadTrainerSettings();
 
@@ -729,7 +730,7 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
             [this](){ QMessageBox::aboutQt(this, "About Qt"); });
 
     connect(actionGitHubHomePage, &QAction::triggered,
-            [](){ QDesktopServices::openUrl(QUrl("https://github.com/Bollos00/LibreMines")); });
+            [](){ QDesktopServices::openUrl(QUrl(LIBREMINES_PROJECT_HOMEPAGE_URL)); });
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     connect(cbCustomizedMinesInPercentage, &QCheckBox::checkStateChanged,
@@ -1138,7 +1139,7 @@ void LibreMinesGui::vSetApplicationTheme(const QString& theme)
     if(LibreMinesAppTheme::bSetApplicationTheme(theme))
     {
         // Create a message if a restart is needed
-        QMessageBox::information(this, "LibreMines",
+        QMessageBox::information(this, "MineCoach",
                                  "Please reset the application to apply this change");
     }
 }
@@ -1944,8 +1945,12 @@ void LibreMinesGui::SLOT_quitApplication()
 void LibreMinesGui::SLOT_showAboutDialog()
 {
     QString text =
-            "LibreMines " + QString(LIBREMINES_PROJECT_VERSION) + "\n" +
-            tr("Copyright (C) 2020-2026  Bruno Bollos Correa\n"
+            "MineCoach " + QString(LIBREMINES_PROJECT_VERSION) + "\n" +
+            tr("A Minesweeper trainer based on LibreMines 3.0.1\n"
+            "<https://github.com/Bollos00/LibreMines>\n"
+            "\n"
+            "Copyright (C) 2020-2026  Bruno Bollos Correa (LibreMines)\n"
+            "Copyright (C) 2026  MineCoach contributors\n"
             "\n"
             "This program is free software: you can redistribute it and/or modify"
             " it under the terms of the GNU General Public License as published by"
@@ -1960,10 +1965,10 @@ void LibreMinesGui::SLOT_showAboutDialog()
             "You should have received a copy of the GNU General Public License"
             " along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"
             "\n"
-            "Get the source code of LibreMines on\n") +
+            "Get the source code of MineCoach on\n") +
             "<" + QString(LIBREMINES_PROJECT_HOMEPAGE_URL) + ">";
 
-    QMessageBox::about(this, "About LibreMines", text);
+    QMessageBox::about(this, "About MineCoach", text);
 }
 
 void LibreMinesGui::SLOT_showHighScores()

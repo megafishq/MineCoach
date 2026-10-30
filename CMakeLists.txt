@@ -33,10 +33,11 @@ endif()
     
 message(STATUS "Setting macOS deployment target to ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 
-project(libremines
-    VERSION "3.0.1"
-    DESCRIPTION " A Free/Libre and Open Source Software Qt based Minesweeper game available for GNU/Linux, FreeBSD, macOS and Windows systems. "
-    HOMEPAGE_URL "https://github.com/Bollos00/LibreMines"
+# MineCoach is a fork of LibreMines 3.0.1 (https://github.com/Bollos00/LibreMines)
+project(minecoach
+    VERSION "1.0.0"
+    DESCRIPTION " A Minesweeper trainer that records your games and coaches cursor movement, patterns and chording. Based on LibreMines. "
+    HOMEPAGE_URL "https://github.com/megafishq/MineCoach"
     LANGUAGES "CXX"
     )
 
@@ -80,9 +81,9 @@ configure_file(${PROJECT_SOURCE_DIR}/include/libreminesconfig.h.in ${PROJECT_BIN
 # Create the translation files (QM File Format) from the ts files
 if(UPDATE_TRANSLATIONS)
     set(TS_FILES
-        etc/translations/${PROJECT_NAME}_es.ts
-        etc/translations/${PROJECT_NAME}_pt_BR.ts
-        etc/translations/${PROJECT_NAME}_tr.ts
+        etc/translations/libremines_es.ts
+        etc/translations/libremines_pt_BR.ts
+        etc/translations/libremines_tr.ts
         )
     # Put the QM Files on `etc/translations`
     set_source_files_properties(${TS_FILES} PROPERTIES OUTPUT_LOCATION ${PROJECT_SOURCE_DIR}/etc/translations)
@@ -129,10 +130,10 @@ if(APPLE)
     # App bundle identification
     set(MACOSX_BUNDLE_BUNDLE_NAME "LibreMines")
     set(MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2020-2026 Bruno Bollos Correa")
-    set(MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.Bollos00.LibreMines")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.megafishq.MineCoach")
     
     # App bundle executable and display names
-    set(MACOSX_BUNDLE_EXECUTABLE_NAME "libremines")
+    set(MACOSX_BUNDLE_EXECUTABLE_NAME "minecoach")
     
     # Minimum system version (already set via CMAKE_OSX_DEPLOYMENT_TARGET)
     # This will be automatically added to Info.plist as LSMinimumSystemVersion
@@ -281,49 +282,49 @@ if(UNIX)
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         )
 
-    install(FILES share/desktop_entry/io.github.Bollos00.LibreMines.desktop DESTINATION share/applications)
-    install(FILES share/icons/libremines.svg DESTINATION share/icons/hicolor/scalable/apps)
+    install(FILES share/desktop_entry/io.github.megafishq.MineCoach.desktop DESTINATION share/applications)
+    install(FILES share/icons/libremines.svg DESTINATION share/icons/hicolor/scalable/apps RENAME minecoach.svg)
 
     # Install AppStream metainfo file
-    install(FILES share/metainfo/io.github.Bollos00.LibreMines.appdata.xml
+    install(FILES share/metainfo/io.github.megafishq.MineCoach.appdata.xml
             DESTINATION share/metainfo)
 
     # Install the extra minefield themes on
-    #  ${CMAKE_INSTALL_PREFIX}/share/libremines/minefield_extra_themes
+    #  ${CMAKE_INSTALL_PREFIX}/share/minecoach/minefield_extra_themes
     if(INSTALL_EXTRA_MINEFIELD_THEMES)
         install(
             DIRECTORY share/minefield_themes/alternative_light
-            DESTINATION share/libremines/minefield_extra_themes
+            DESTINATION share/minecoach/minefield_extra_themes
             )
         install(
             DIRECTORY share/minefield_themes/alternative_dark
-            DESTINATION share/libremines/minefield_extra_themes
+            DESTINATION share/minecoach/minefield_extra_themes
             )
         install(
             DIRECTORY share/minefield_themes/flowerfield
-            DESTINATION share/libremines/minefield_extra_themes
+            DESTINATION share/minecoach/minefield_extra_themes
             )
         install(
             DIRECTORY share/minefield_themes/twemoji
-            DESTINATION share/libremines/minefield_extra_themes
+            DESTINATION share/minecoach/minefield_extra_themes
             )
     endif()
     if(INSTALL_EXTRA_FACESREACTION_THEMES)
         install(
             DIRECTORY share/faces_reaction/open-emoji-black
-            DESTINATION share/libremines/facesreaction_extra_themes
+            DESTINATION share/minecoach/facesreaction_extra_themes
              )
         install(
             DIRECTORY share/faces_reaction/open-emoji-white
-            DESTINATION share/libremines/facesreaction_extra_themes
+            DESTINATION share/minecoach/facesreaction_extra_themes
             )
         install(
             DIRECTORY share/faces_reaction/twemoji-color
-            DESTINATION share/libremines/facesreaction_extra_themes
+            DESTINATION share/minecoach/facesreaction_extra_themes
             )
         install(
             DIRECTORY share/faces_reaction/SecularSteve_custom
-            DESTINATION share/libremines/facesreaction_extra_themes
+            DESTINATION share/minecoach/facesreaction_extra_themes
             )
     endif()
 
