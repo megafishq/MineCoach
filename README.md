@@ -10,10 +10,10 @@ MineCoach is a fork of [LibreMines](https://github.com/Bollos00/LibreMines) by B
 
 Every game is recorded: each reveal, flag and chord with its timestamp, plus the mouse path over the board at ~120 Hz. After a game ends, press **Analyze Game** (Ctrl+A) or use **Trainer > Analyze Last Game**. The analysis window replays the game move by move and lists:
 
-- **Cursor jumps**: you moved 4+ cells away while a cell next to your cursor was already provable. MineCoach names what you missed (satisfied number, filled number, a `1-1`, `1-2`, `1-2-1` or `1-2-2-1` pattern, or an advanced deduction) and highlights its numbers, the missed cell and the path your cursor took.
+- **Cursor jumps**: you moved 4+ cells away while a cell next to your cursor was already provable from the numbers around it (within 3 cells of where your cursor was; any depth of reasoning inside that area counts, information from further away does not, and your flags count as known when they are provable). MineCoach never uses the hidden mines to decide this. MineCoach names what you missed (satisfied number, filled number, a `1-1`, `1-2`, `1-2-1` or `1-2-2-1` pattern, or an advanced deduction) and highlights its numbers, the missed cell and the path your cursor took.
 - **Better chord**: a nearby satisfied number would have opened everything your chord did, plus more. The optimal square to chord on is highlighted.
 - **Clicks -> chord**: several single clicks around one number that a single chord (plus any missing flags) would have done in fewer clicks.
-- **Rejected / wasted / low-value chords**, **unnecessary guesses** (clicking an unproven cell while a proven safe cell existed) and **wrong flags**.
+- **Rejected / wasted / low-value chords**, **unnecessary guesses** (clicking an unproven cell while a cell within 4 cells of it was provably safe from the nearby numbers) and **wrong flags**.
 - Stats: 3BV, 3BV/s, click efficiency, cursor travel and click counts.
 
 Cells are named `(column,row)` counting from the top-left cell `(1,1)`; column and row numbers are drawn around the board, hovering a cell shows its coordinates, and hovering a coordinate in the text outlines that cell on the board.

@@ -191,6 +191,9 @@ struct TrainerDeduction
     QVector<int> shared;     ///< Pattern: unknown cells next to both numbers
     QVector<int> knownMines; ///< Hidden cells already known to be mines (subtracted from the numbers)
     int solutions = 0;       ///< Enumeration: number of arrangements that fit
+    QVector<int> support;    ///< Previously proven cells this step relied on
+    int depth = 1;           ///< Steps of reasoning needed: 0 = your own (provable) flag,
+                             ///< 1 = follows directly from the open numbers and your flags
 };
 
 /**
@@ -207,11 +210,19 @@ public:
      * Flags are ignored: only information visible on revealed numbers is used,
      * so the result reflects what the player could have known.
      *
+     * When a window is given, only the numbers within `radius` cells
+     * (Chebyshev distance) of `center` are used. That models what a player can
+     * work out by looking at one area: any depth of reasoning inside the area,
+     * nothing from further away.
+     *
      * @param board Board state to analyse
      * @param useEnumeration Also try exhaustive local enumeration
+     * @param center Centre cell of the window, or -1 for the whole board
+     * @param radius Window radius in cells (ignored without a centre)
      * @return Map cell index -> deduction
      */
-    static QHash<int, TrainerDeduction> deduce(const TrainerBoard& board, bool useEnumeration = true);
+    static QHash<int, TrainerDeduction> deduce(const TrainerBoard& board, bool useEnumeration = true,
+                                               int center = -1, int radius = 0);
 
     /**
      * @brief Human readable name of a deduction kind
@@ -228,7 +239,17 @@ public:
      * @param d The deduction to explain
      * @return One sentence per step
      */
-    static QStringList explainSteps(const TrainerBoard& board, const TrainerDeduction& d);
+    static QStringList explainSteps(const TrainerBoard& board, const TrainerDeduction& d,
+                                    const QVector<TrainerDeduction>& prerequisites = QVector<TrainerDeduction>());
+
+    /**
+     * @brief The earlier deductions a deduction depends on, shallowest first
+     *
+     * Follows TrainerDeduction::support recursively. Flags placed by the
+     * player (depth 0) are included so explanations can mention them.
+     */
+    static QVector<TrainerDeduction> prerequisitesOf(const QHash<int, TrainerDeduction>& all,
+                                                     const TrainerDeduction& d);
 };
 
 /**
@@ -267,6 +288,7 @@ struct TrainerFinding
     int wastedClicks = 0;  ///< Clicks that a better play would have saved
     bool hasDeduction = false;    ///< deduction below is set
     TrainerDeduction deduction;   ///< The logic behind the finding (missed pattern, safe cell)
+    QVector<TrainerDeduction> prerequisites; ///< Earlier steps the deduction needs
     qint64 cursorFromMs = -1;  ///< Start of the cursor path to draw
     qint64 cursorToMs = -1;    ///< End of the cursor path to draw
 
@@ -329,6 +351,8 @@ public:
     {
         double jumpThreshold = 4.0; ///< Distance in cells counted as a jump
         double localRadius = 2.5;   ///< How close a missed cell must be to the old position
+        int jumpWindow = 3;         ///< Missed cells must be solvable from numbers this close to the previous click
+        int guessWindow = 4;        ///< A safe cell solvable from numbers this close to a guess makes it unnecessary
     };
 
     /**

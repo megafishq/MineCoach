@@ -540,7 +540,8 @@ void TrainerBoardView::paintEvent(QPaintEvent* event)
 // ===========================================================================
 
 TrainerPatternDialog::TrainerPatternDialog(const TrainerRecording& recording, const QByteArray& snapshot,
-                                           const TrainerDeduction& d, QWidget* parent) :
+                                           const TrainerDeduction& d,
+                                           const QVector<TrainerDeduction>& prerequisites, QWidget* parent) :
     QDialog(parent)
 {
     setAttribute(Qt::WA_DeleteOnClose);
@@ -628,7 +629,7 @@ TrainerPatternDialog::TrainerPatternDialog(const TrainerRecording& recording, co
     QTextBrowser* steps = new QTextBrowser(this);
     steps->setOpenLinks(false);
     QString html = tr("<p><b>Why:</b></p><ol>");
-    for(const QString& step : TrainerSolver::explainSteps(board, d))
+    for(const QString& step : TrainerSolver::explainSteps(board, d, prerequisites))
         html += QStringLiteral("<li style='margin-bottom:4px'>%1</li>")
                 .arg(TrainerAnalysisDialog::linkifyCells(step.toHtmlEscaped()));
     html += tr("</ol><p style='color:gray'>Hover a coordinate to highlight that cell. "
@@ -1004,6 +1005,6 @@ void TrainerAnalysisDialog::SLOT_readMore()
         return;
 
     TrainerPatternDialog* dialog = new TrainerPatternDialog(rec, report.snapshots.value(f.actionIndex),
-                                                            f.deduction, this);
+                                                            f.deduction, f.prerequisites, this);
     dialog->show();
 }

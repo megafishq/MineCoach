@@ -171,10 +171,12 @@ public:
      * @param recording The recorded game
      * @param snapshot Board state the deduction was made on
      * @param deduction The deduction to explain
+     * @param prerequisites Earlier steps the deduction depends on
      * @param parent Parent widget
      */
     TrainerPatternDialog(const TrainerRecording& recording, const QByteArray& snapshot,
-                         const TrainerDeduction& deduction, QWidget* parent = nullptr);
+                         const TrainerDeduction& deduction,
+                         const QVector<TrainerDeduction>& prerequisites, QWidget* parent = nullptr);
 };
 
 /**

@@ -367,11 +367,14 @@ double euclid(const TrainerBoard& b, int p, int q)
 class SolverState
 {
 public:
-    explicit SolverState(const TrainerBoard& b) : board(b)
+    explicit SolverState(const TrainerBoard& b, int center = -1, int radius = 0) : board(b)
     {
         for(int i=0; i<b.value.size(); ++i)
         {
             if(!b.revealed[i] || b.value[i] <= 0)
+                continue;
+            // Only numbers inside the window take part
+            if(center >= 0 && chebyshev(b, i, center) > radius)
                 continue;
             Constraint c;
             c.origin = i;
@@ -416,6 +419,29 @@ public:
         return remaining;
     }
 
+    // Hidden cells of constraint k that are already proven (mine or safe)
+    QVector<int> knownIn(int k) const
+    {
+        QVector<int> cells;
+        for(int cell : constraints[k].cells)
+        {
+            if(known.contains(cell))
+                cells.append(cell);
+        }
+        return cells;
+    }
+
+    // Move this round's deductions into the known set
+    void commit(int depth)
+    {
+        for(auto it = pending.begin(); it != pending.end(); ++it)
+        {
+            it->depth = depth;
+            known.insert(it.key(), it.value());
+        }
+        pending.clear();
+    }
+
     // Hidden cells of constraint k that are already known to be mines
     QVector<int> knownMinesOf(int k) const
     {
@@ -434,7 +460,7 @@ public:
              const QVector<int>& clueRemaining, const QString& pattern = QString(),
              const TrainerDeduction& details = TrainerDeduction())
     {
-        if(known.contains(cell))
+        if(known.contains(cell) || pending.contains(cell))
             return false;
         TrainerDeduction d = details;
         d.cell = cell;
@@ -445,7 +471,7 @@ public:
         d.pattern = pattern;
         if(d.group.isEmpty())
             d.group = {cell};
-        known.insert(cell, d);
+        pending.insert(cell, d);
         return true;
     }
 
@@ -495,7 +521,8 @@ public:
     const TrainerBoard& board;
     QVector<Constraint> constraints;
     QHash<int, int> byOrigin;
-    QHash<int, TrainerDeduction> known;
+    QHash<int, TrainerDeduction> known;    ///< Proven in earlier rounds
+    QHash<int, TrainerDeduction> pending;  ///< Proven in the current round
 };
 
 QVector<int> subtract(const QVector<int>& a, const QVector<int>& b)
@@ -535,6 +562,10 @@ bool singlesPass(SolverState& s)
         details.group = unknown;
         details.region = unknown;
         details.knownMines = s.knownMinesOf(k);
+        if(remaining == 0)
+            details.support = details.knownMines;
+        else
+            details.support = s.knownIn(k);
         if(remaining == 0)
         {
             for(int cell : unknown)
@@ -582,6 +613,13 @@ bool pairsPass(SolverState& s)
             const int minShared = qMax(0, qMax(ra - static_cast<int>(aOnly.size()),
                                                rb - static_cast<int>(bOnly.size())));
 
+            QVector<int> support = s.knownIn(a);
+            for(int c : s.knownIn(b))
+            {
+                if(!support.contains(c))
+                    support.append(c);
+            }
+
             QVector<int> knownMines = s.knownMinesOf(a);
             for(int m : s.knownMinesOf(b))
             {
@@ -600,6 +638,7 @@ bool pairsPass(SolverState& s)
                 details.region = ua + bOnly;
                 details.shared = shared;
                 details.knownMines = knownMines;
+                details.support = support;
                 const int minSide = rTarget - maxShared;
                 const int maxSide = rTarget - minShared;
                 if(minSide == side.size())
@@ -777,6 +816,11 @@ void enumerationPass(SolverState& s)
                     if(!details.knownMines.contains(m))
                         details.knownMines.append(m);
                 }
+                for(int c2 : s.knownIn(k))
+                {
+                    if(!details.support.contains(c2))
+                        details.support.append(c2);
+                }
             }
             s.add(cells[j], !canSafe[j], TrainerDeduction::Kind::Enumeration, clues, clueRemaining,
                   QString(), details);
@@ -785,33 +829,82 @@ void enumerationPass(SolverState& s)
 }
 }
 
-QHash<int, TrainerDeduction> TrainerSolver::deduce(const TrainerBoard& board, bool useEnumeration)
+namespace
 {
-    SolverState s(board);
-
-    bool changed = true;
-    while(changed)
+// Solve in rounds: round N only uses what was proven before it, so every
+// deduction's depth is the shortest chain of steps that reaches it
+void solveInRounds(SolverState& s, bool useEnumeration)
+{
+    for(int round = 1; ; ++round)
     {
-        changed = singlesPass(s);
-        if(changed)
-            continue;
-        changed = pairsPass(s);
+        singlesPass(s);
+        pairsPass(s);
+        if(s.pending.isEmpty() && useEnumeration)
+            enumerationPass(s);
+        if(s.pending.isEmpty())
+            break;
+        s.commit(round);
     }
+}
+}
 
-    if(useEnumeration)
+QHash<int, TrainerDeduction> TrainerSolver::deduce(const TrainerBoard& board, bool useEnumeration,
+                                                   int center, int radius)
+{
+    SolverState s(board, center, radius);
+    solveInRounds(s, useEnumeration);
+
+    // The player's flags are their own knowledge: a flag that is provable
+    // from the numbers counts as already known (depth 0). Unprovable flags are
+    // ignored, so the hidden mines never leak into the analysis.
+    bool anyFlag = false;
+    for(auto it = s.known.constBegin(); it != s.known.constEnd(); ++it)
     {
-        const int before = s.known.size();
-        enumerationPass(s);
-        // New certainties may unlock further simple deductions
-        if(s.known.size() != before)
+        if(it->mine && board.marks[it.key()] == TrainerBoard::Mark::Flag)
         {
-            changed = true;
-            while(changed)
-                changed = singlesPass(s) || pairsPass(s);
+            anyFlag = true;
+            break;
         }
     }
+    if(!anyFlag)
+        return s.known;
 
-    return s.known;
+    SolverState seeded(board, center, radius);
+    for(auto it = s.known.constBegin(); it != s.known.constEnd(); ++it)
+    {
+        if(it->mine && board.marks[it.key()] == TrainerBoard::Mark::Flag)
+        {
+            TrainerDeduction flag = it.value();
+            flag.depth = 0;
+            flag.support.clear();
+            seeded.known.insert(it.key(), flag);
+        }
+    }
+    solveInRounds(seeded, useEnumeration);
+    return seeded.known;
+}
+
+QVector<TrainerDeduction> TrainerSolver::prerequisitesOf(const QHash<int, TrainerDeduction>& all,
+                                                         const TrainerDeduction& d)
+{
+    QVector<TrainerDeduction> result;
+    QSet<int> seen;
+    QVector<int> stack = d.support;
+    while(!stack.isEmpty())
+    {
+        const int c = stack.takeLast();
+        if(seen.contains(c) || !all.contains(c))
+            continue;
+        seen.insert(c);
+        const TrainerDeduction& p = all[c];
+        result.append(p);
+        stack += p.support;
+    }
+    std::sort(result.begin(), result.end(), [](const TrainerDeduction& a, const TrainerDeduction& b)
+    {
+        return a.depth != b.depth ? a.depth < b.depth : a.cell < b.cell;
+    });
+    return result;
 }
 
 namespace
@@ -856,10 +949,59 @@ QString knownPart(const TrainerBoard& b, int clue, const QVector<int>& knownMine
 }
 }
 
-QStringList TrainerSolver::explainSteps(const TrainerBoard& b, const TrainerDeduction& d)
+// One line reason for an earlier step of a chain
+QString shortReason(const TrainerBoard& b, const TrainerDeduction& p)
+{
+    const int w = b.width;
+    const QString what = QStringLiteral("%1 is %2").arg(TrainerAnalyzer::cellName(p.cell, w),
+                                                        p.mine ? QStringLiteral("a mine") : QStringLiteral("safe"));
+    const int clue = p.clues.value(0, -1);
+    const QString clueName = clue >= 0 ? QStringLiteral("the %1 at %2").arg(b.value[clue])
+                                          .arg(TrainerAnalyzer::cellName(clue, w)) : QString();
+    switch(p.kind)
+    {
+        case TrainerDeduction::Kind::SatisfiedNumber:
+            return QStringLiteral("%1, because %2 already has all its mines.").arg(what, clueName);
+        case TrainerDeduction::Kind::FilledNumber:
+            return QStringLiteral("%1, because %2 has exactly that many unknown cells left.").arg(what, clueName);
+        case TrainerDeduction::Kind::Pattern:
+            return QStringLiteral("%1, from the %2 pattern of %3 and the %4 at %5.")
+                   .arg(what, p.pattern, clueName).arg(b.value[p.clues.value(1)])
+                   .arg(TrainerAnalyzer::cellName(p.clues.value(1), w));
+        case TrainerDeduction::Kind::Enumeration:
+            return QStringLiteral("%1, by checking every arrangement around it.").arg(what);
+    }
+    return what + QLatin1Char('.');
+}
+
+QStringList TrainerSolver::explainSteps(const TrainerBoard& b, const TrainerDeduction& d,
+                                        const QVector<TrainerDeduction>& prerequisites)
 {
     QStringList steps;
     const int w = b.width;
+
+    // Earlier steps of the chain (flags you placed count as known)
+    QVector<int> flags;
+    bool anyProven = false;
+    for(const TrainerDeduction& p : prerequisites)
+    {
+        if(p.depth == 0)
+            flags.append(p.cell);
+        else
+            anyProven = true;
+    }
+    if(!flags.isEmpty())
+        steps << QStringLiteral("You had already flagged %1.").arg(cellList(flags, w));
+    if(anyProven)
+    {
+        steps << QStringLiteral("This needs %1 steps of reasoning. Before the last step:").arg(d.depth);
+        for(const TrainerDeduction& p : prerequisites)
+        {
+            if(p.depth > 0)
+                steps << QStringLiteral("Step %1: %2").arg(p.depth).arg(shortReason(b, p));
+        }
+        steps << QStringLiteral("Last step:");
+    }
 
     switch(d.kind)
     {
@@ -1158,9 +1300,11 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
             if(dist >= options.jumpThreshold)
             {
                 stats.jumps++;
-                ensureDeductions();
+                // Only what the player could see around the previous click
+                const QHash<int, TrainerDeduction> local =
+                    TrainerSolver::deduce(board, true, prevCell, options.jumpWindow);
                 TrainerDeduction missed;
-                if(pickMissedNear(board, ded, prevCell, cell, options.localRadius, missed))
+                if(pickMissedNear(board, local, prevCell, cell, options.localRadius, missed))
                 {
                     stats.jumpsWithMissedPattern++;
                     TrainerFinding f;
@@ -1173,6 +1317,7 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                     f.clueCells = missed.clues;
                     f.hasDeduction = true;
                     f.deduction = missed;
+                    f.prerequisites = TrainerSolver::prerequisitesOf(local, missed);
                     f.cursorFromMs = prevT;
                     f.cursorToMs = a.tMs;
                     QString missedName;
@@ -1215,10 +1360,13 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                 if(provenSafe)
                     break;
 
+                const QHash<int, TrainerDeduction> local =
+                    TrainerSolver::deduce(board, true, cell, options.guessWindow);
+
                 // Was a proven safe cell available somewhere?
                 int nearest = -1;
                 double nearestDist = 1e9;
-                for(auto it = ded.constBegin(); it != ded.constEnd(); ++it)
+                for(auto it = local.constBegin(); it != local.constEnd(); ++it)
                 {
                     const TrainerDeduction& d = it.value();
                     if(d.mine || board.revealed[d.cell] || board.marks[d.cell] != TrainerBoard::Mark::None)
@@ -1240,14 +1388,15 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                 f.severity = board.isMine(cell) ? 3 : 2;
                 f.actionCell = cell;
                 f.suggestedCell = nearest;
-                f.clueCells = ded.value(nearest).clues;
+                f.clueCells = local.value(nearest).clues;
                 f.hasDeduction = true;
-                f.deduction = ded.value(nearest);
+                f.deduction = local.value(nearest);
+                f.prerequisites = TrainerSolver::prerequisitesOf(local, f.deduction);
                 f.title = QStringLiteral("Guessed %1%2 while %3 was provably safe")
                           .arg(cellName(cell, board.width),
                                board.isMine(cell) ? QStringLiteral(" (a mine!)") : QString(),
                                cellName(nearest, board.width));
-                f.detail = describeDeduction(board, ded.value(nearest));
+                f.detail = describeDeduction(board, local.value(nearest));
                 report.findings.append(f);
                 break;
             }
@@ -1274,6 +1423,7 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                         f.detail = describeDeduction(board, ded.value(cell));
                         f.hasDeduction = true;
                         f.deduction = ded.value(cell);
+                        f.prerequisites = TrainerSolver::prerequisitesOf(ded, f.deduction);
                     }
                     else
                         f.detail = QStringLiteral("The flag was not justified by the visible numbers.");

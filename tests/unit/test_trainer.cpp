@@ -59,6 +59,9 @@ private slots:
     void testDeductionsAreSoundOnRandomBoards();
     void testDeductionDetailsAndExplanation();
     void testFindingCarriesDeduction();
+    void testDepthIsLayered();
+    void testFlagsCountAsKnownOnlyWhenProvable();
+    void testLocalWindowIgnoresFarInformation();
     void testCursorJumpPointsAtMissedCell();
     void testShortMoveIsNotAJump();
     void testClicksCouldBeChord();
@@ -265,9 +268,14 @@ void TestTrainer::testDeductionDetailsAndExplanation()
     b2.reveal(b2.index(1, 0));
     b2.reveal(b2.index(0, 1));
     b2.reveal(b2.index(1, 1));
+    const QHash<int, TrainerDeduction> d1 = TrainerSolver::deduce(b2, false);
+    QVERIFY(d1.value(0).mine);
+    QCOMPARE(d1.value(0).kind, TrainerDeduction::Kind::FilledNumber);
+    // Without a flag the shortest route to (2,0) is the 1-1 pattern
+    QCOMPARE(d1.value(b2.index(2, 0)).kind, TrainerDeduction::Kind::Pattern);
+    // With the mine flagged, the 1 at (1,0) is simply satisfied
+    b2.toggleMark(0);
     const QHash<int, TrainerDeduction> d2 = TrainerSolver::deduce(b2, false);
-    QVERIFY(d2.value(0).mine);
-    QCOMPARE(d2.value(0).kind, TrainerDeduction::Kind::FilledNumber);
     const TrainerDeduction safe = d2.value(b2.index(2, 0));
     QVERIFY(!safe.mine);
     QCOMPARE(safe.kind, TrainerDeduction::Kind::SatisfiedNumber);
@@ -289,6 +297,116 @@ void TestTrainer::testFindingCarriesDeduction()
     QVERIFY(jumps.first().hasDeduction);
     QCOMPARE(jumps.first().deduction.cell, jumps.first().suggestedCell);
     QVERIFY(!jumps.first().deduction.group.isEmpty());
+}
+
+void TestTrainer::testDepthIsLayered()
+{
+    QRandomGenerator rng(777);
+    int deep = 0;
+    for(int round=0; round<200; ++round)
+    {
+        const int w = 16, h = 16, mines = 40;
+        TrainerRecording r;
+        r.width = w;
+        r.height = h;
+        r.mines = mines;
+        r.mineLayout = QVector<bool>(w*h, false);
+        for(int placed=0; placed<mines;)
+        {
+            const int c = rng.bounded(w*h);
+            if(!r.mineLayout[c]) { r.mineLayout[c] = true; ++placed; }
+        }
+        TrainerBoard b(r);
+        for(int k=0; k<6; ++k)
+        {
+            const int c = rng.bounded(w*h);
+            if(!b.isMine(c))
+                b.reveal(c);
+        }
+
+        const QHash<int, TrainerDeduction> d = TrainerSolver::deduce(b);
+        for(auto it = d.constBegin(); it != d.constEnd(); ++it)
+        {
+            const TrainerDeduction& x = it.value();
+            QVERIFY(x.depth >= 1); // no flags on these boards
+            for(int s : x.support)
+            {
+                QVERIFY(d.contains(s));
+                QVERIFY2(d.value(s).depth < x.depth, "a step may only use earlier rounds");
+            }
+            const QVector<TrainerDeduction> pre = TrainerSolver::prerequisitesOf(d, x);
+            for(int i=1; i<pre.size(); ++i)
+                QVERIFY(pre[i-1].depth <= pre[i].depth);
+            if(x.depth >= 2)
+            {
+                ++deep;
+                QVERIFY(!pre.isEmpty());
+            }
+        }
+    }
+    QVERIFY(deep > 0);
+}
+
+void TestTrainer::testFlagsCountAsKnownOnlyWhenProvable()
+{
+    // (0,1) only touches (0,0): the mine is provable
+    TrainerRecording r = TrainerRecording::fromMinefieldString(
+        "*..\n"
+        "...\n");
+    TrainerBoard b(r);
+    b.reveal(b.index(1, 0));
+    b.reveal(b.index(0, 1));
+    b.reveal(b.index(1, 1));
+
+    TrainerBoard flagged = b;
+    flagged.toggleMark(0);
+    const QHash<int, TrainerDeduction> d = TrainerSolver::deduce(flagged);
+    QCOMPARE(d.value(0).depth, 0);                 // your flag is known
+    QCOMPARE(d.value(b.index(2, 0)).depth, 1);     // so this is one step away
+
+    // A flag on a safe cell is not knowledge: same result as without it
+    TrainerBoard wrong = b;
+    wrong.toggleMark(b.index(2, 1));
+    const QHash<int, TrainerDeduction> dw = TrainerSolver::deduce(wrong);
+    const QHash<int, TrainerDeduction> dn = TrainerSolver::deduce(b);
+    QCOMPARE(dw.size(), dn.size());
+    for(auto it = dn.constBegin(); it != dn.constEnd(); ++it)
+    {
+        QVERIFY(dw.contains(it.key()));
+        QCOMPARE(dw.value(it.key()).mine, it.value().mine);
+        QCOMPARE(dw.value(it.key()).depth, it.value().depth);
+    }
+}
+
+void TestTrainer::testLocalWindowIgnoresFarInformation()
+{
+    // A row of 1s along a wall: only the two ends pin the mines down, the
+    // middle is solved by walking inwards from far away
+    TrainerRecording r = TrainerRecording::fromMinefieldString(
+        ".*..*..*.\n"
+        ".........\n");
+    TrainerBoard b(r);
+    for(int x=0; x<9; ++x)
+        b.reveal(b.index(x, 1));
+    const int middleMine = b.index(4, 0);
+
+    const QHash<int, TrainerDeduction> global = TrainerSolver::deduce(b);
+    QVERIFY(global.contains(middleMine));
+    QVERIFY(global.value(middleMine).mine);
+
+    // Looking only at the numbers right around it is not enough
+    const QHash<int, TrainerDeduction> local = TrainerSolver::deduce(b, true, b.index(4, 1), 1);
+    QVERIFY(!local.contains(middleMine));
+
+    // Any depth is fine as long as the information is close: the edge cell
+    // is solvable from the numbers next to it
+    const QHash<int, TrainerDeduction> edge = TrainerSolver::deduce(b, true, b.index(1, 1), 1);
+    QVERIFY(edge.contains(b.index(2, 0)));
+    QVERIFY(!edge.value(b.index(2, 0)).mine);
+
+    // Every local deduction agrees with the truth
+    for(auto it = local.constBegin(); it != local.constEnd(); ++it)
+        QCOMPARE(it.value().mine, b.isMine(it.key()));
 }
 
 void TestTrainer::testCursorJumpPointsAtMissedCell()
