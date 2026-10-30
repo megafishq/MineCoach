@@ -10,6 +10,25 @@ The game supports dark and light themes, extensive customization, customizable f
 
 The source code is licensed under the [GNU General Public License at version 3](https://www.gnu.org/licenses/gpl-3.0.en.html) (or any later version), this includes all files inside the `src` directory. The artworks are licensed under the [Creative Commons Attribution-Share Alike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/), this includes all files on the `share` directory.
 
+## Trainer (this fork)
+
+This fork turns LibreMines into a Minesweeper **trainer**. Every game is recorded (each reveal, flag and chord with its timestamp, plus the mouse path over the board at ~120 Hz) and can be analysed afterwards.
+
+After a game ends, press **Analyze Game** (Ctrl+A) or use **Trainer > Analyze Last Game**. The analysis window replays the game move by move and lists:
+
+- **Cursor jumps**: you moved 4+ cells away while a cell next to your cursor was already provable. The trainer names what you missed (satisfied number, filled number, a `1-1`, `1-2`, `1-2-1` or `1-2-2-1` pattern, or an advanced deduction) and highlights its numbers and the missed cell.
+- **Better chord**: a nearby satisfied number would have opened everything your chord did, plus more. The optimal square to chord on is highlighted.
+- **Clicks -> chord**: several single clicks around one number that a single chord (plus any missing flags) would have done in fewer clicks.
+- **Rejected / wasted / low-value chords**, **unnecessary guesses** (clicking an unproven cell while a proven safe cell existed) and **wrong flags**.
+- Stats: 3BV, 3BV/s, click efficiency, cursor travel and click counts.
+
+Recordings are saved as JSON in `<app data>/trainer_recordings` (**Trainer > Open Recordings Folder**) and can be reopened with **Trainer > Open Recording...**. From the command line:
+
+```sh
+libremines --analyze game.json   # print the text report
+libremines --review game.json    # open the analysis window
+```
+
 ## Installing from Package Manager
 
 ### Arch User Repository

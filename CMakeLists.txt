@@ -190,6 +190,10 @@ set(SOURCE_FILES
     src/qlabel_adapted.cpp src/qlabel_adapted.h
 
     src/soundeffects.cpp src/soundeffects.h
+    src/trainerrecording.cpp src/trainerrecording.h
+    src/trainerrecorder.cpp src/trainerrecorder.h
+    src/traineranalyzer.cpp src/traineranalyzer.h
+    src/traineranalysisdialog.cpp src/traineranalysisdialog.h
     share/facesreaction.qrc
     share/icons.qrc
     share/minefield_themes.qrc

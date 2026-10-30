@@ -52,6 +52,8 @@ set(LIBREMINES_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/soundeffects.cpp
     ${PROJECT_SOURCE_DIR}/src/gameplaythemechooser.cpp
     ${PROJECT_SOURCE_DIR}/src/minefieldthemepreview.cpp
+    ${PROJECT_SOURCE_DIR}/src/trainerrecording.cpp
+    ${PROJECT_SOURCE_DIR}/src/traineranalyzer.cpp
 )
 
 # Create core library for testing

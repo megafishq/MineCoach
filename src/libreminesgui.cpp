@@ -35,6 +35,9 @@
 #include <QMessageBox>
 #include <QTranslator>
 #include <QStandardPaths>
+#include <QFileDialog>
+#include <QDesktopServices>
+#include <QUrl>
 
 #include "libreminesgui.h"
 #include "libreminesscoresdialog.h"
@@ -42,6 +45,7 @@
 #include "libreminesviewscoresdialog.h"
 #include "libreminesapptheme.h"
 #include "libreminespreferencessaver.h"
+#include "traineranalysisdialog.h"
 
 LibreMinesGui::CellGui::CellGui():
     button(nullptr),
@@ -94,7 +98,16 @@ LibreMinesGui::LibreMinesGui(QWidget *parent, const int thatWidth, const int tha
     qApp->installEventFilter(this);
 
     this->setWindowIcon(QIcon(":/icons_rsc/icons/libremines.svg"));
-    this->setWindowTitle("LibreMines");
+    this->setWindowTitle("LibreMines Trainer");
+
+    // The trainer records every cell action, whether it comes from the mouse
+    // or from the keyboard controller
+    connect(this, &LibreMinesGui::SIGNAL_cleanCell,
+            &trainerRecorder, &TrainerRecorder::SLOT_reveal);
+    connect(this, &LibreMinesGui::SIGNAL_addOrRemoveFlag,
+            &trainerRecorder, &TrainerRecorder::SLOT_flag);
+    connect(this, &LibreMinesGui::SIGNAL_cleanNeighborCells,
+            &trainerRecorder, &TrainerRecorder::SLOT_chord);
 
     // Initializr keyboard controller attributes
     controller = KeyboardController();
@@ -227,6 +240,7 @@ void LibreMinesGui::vNewGame(const uchar _X,
     buttonRestartInGame->setEnabled(false);
     buttonSaveMinefieldAsImage->setEnabled(false);
     buttonSaveScore->hide();
+    buttonAnalyzeGame->hide();
     scrollAreaEndGameResults->hide();
 
     // Create the game engine instance
@@ -380,6 +394,9 @@ void LibreMinesGui::vNewGame(const uchar _X,
 
     updateFaceReaction(FacesReaction::DEFAULT);
 
+    trainerRecorder.vStart(_X, _Y, i_nMines_, preferences->optionUseQuestionMark(),
+                           widgetBoardContents, [this](){ return cellLength; });
+
     bMinefieldBeingCreated = false;
 
     vAdjustInterfaceInGame();
@@ -438,21 +455,34 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     menuOptions = new QMenu(menuBarGlobal);
     menuHighScores = new QMenu(menuBarGlobal);
     menuHelp = new QMenu(menuBarGlobal);
+    menuTrainer = new QMenu(menuBarGlobal);
+
+    actionAnalyzeLastGame = new QAction(this);
+    actionOpenRecording = new QAction(this);
+    actionOpenRecordingsFolder = new QAction(this);
 
     this->setMenuBar(menuBarGlobal);
     this->setStatusBar(new QStatusBar(this));
 
     menuBarGlobal->addAction(menuOptions->menuAction());
     menuBarGlobal->addAction(menuHighScores->menuAction());
+    menuBarGlobal->addAction(menuTrainer->menuAction());
     menuBarGlobal->addAction(menuHelp->menuAction());
 
     menuOptions->addActions({actionPreferences, actionToggleFullScreen});
     menuHighScores->addActions({actionShowHighScores, actionImportHighScores, actionExportHighScores});
     menuHelp->addActions({actionAbout, actionAboutQt, actionGitHubHomePage});
+    menuTrainer->addActions({actionAnalyzeLastGame, actionOpenRecording, actionOpenRecordingsFolder});
 
     menuOptions->setTitle(tr("Options"));
     menuHighScores->setTitle(tr("High Scores"));
     menuHelp->setTitle(tr("Help"));
+    menuTrainer->setTitle(tr("Trainer"));
+
+    actionAnalyzeLastGame->setText(tr("Analyze Last Game..."));
+    actionAnalyzeLastGame->setEnabled(false);
+    actionOpenRecording->setText(tr("Open Recording..."));
+    actionOpenRecordingsFolder->setText(tr("Open Recordings Folder"));
 
     actionPreferences->setText(tr("Preferences..."));
     actionToggleFullScreen->setText(tr("Toggle Full Screen"));
@@ -502,6 +532,13 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     labelYouWonYouLost = new QLabel(widgetEndGameResultsContents);
     labelStatsLastMatch = new QLabel(widgetEndGameResultsContents);
 
+    buttonAnalyzeGame = new QPushButton(widgetEndGameResultsContents);
+    buttonAnalyzeGame->setText(tr("Analyze Game"));
+    buttonAnalyzeGame->setMinimumSize(0, 35);
+    buttonAnalyzeGame->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
+    buttonAnalyzeGame->hide();
+
+    layoutEndGameResults->addWidget(buttonAnalyzeGame);
     layoutEndGameResults->addWidget(labelYouWonYouLost);
     layoutEndGameResults->addWidget(labelStatsLastMatch);
 
@@ -627,6 +664,15 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
 
     connect(actionAbout, &QAction::triggered,
             this, &LibreMinesGui::SLOT_showAboutDialog);
+
+    connect(buttonAnalyzeGame, &QPushButton::released,
+            this, &LibreMinesGui::SLOT_analyzeLastGame);
+    connect(actionAnalyzeLastGame, &QAction::triggered,
+            this, &LibreMinesGui::SLOT_analyzeLastGame);
+    connect(actionOpenRecording, &QAction::triggered,
+            this, &LibreMinesGui::SLOT_openRecording);
+    connect(actionOpenRecordingsFolder, &QAction::triggered,
+            this, &LibreMinesGui::SLOT_openRecordingsFolder);
 
     connect(actionAboutQt, &QAction::triggered,
             [this](){ QMessageBox::aboutQt(this, "About Qt"); });
@@ -1106,6 +1152,7 @@ void LibreMinesGui::SLOT_QuitGame()
     labelStatsLastMatch->setText(" ");
 
     Q_EMIT SIGNAL_stopGame();
+    trainerRecorder.vStop();
 
     vResetPrincipalMatrix();
     vHideInterfaceInGame();
@@ -1481,6 +1528,8 @@ void LibreMinesGui::SLOT_gameWon()
 
     controller.deactivate(this);
 
+    vFinishTrainerRecording(true);
+
     updateFaceReaction(FacesReaction::GAME_WON);
 
     Q_EMIT SIGNAL_playSoundEffect(SoundEffects::GAME_WON);
@@ -1541,8 +1590,70 @@ void LibreMinesGui::SLOT_gameLost(const uchar _X, const uchar _Y)
 
     controller.deactivate(this);
 
+    vFinishTrainerRecording(false);
+
     updateFaceReaction(FacesReaction::GAME_LOST);
     Q_EMIT SIGNAL_playSoundEffect(SoundEffects::GAME_LOST);
+}
+
+void LibreMinesGui::vFinishTrainerRecording(const bool won)
+{
+    const uchar w = gameEngine->rows();
+    const uchar h = gameEngine->lines();
+    QVector<bool> layout(w*h, false);
+    for(uchar j=0; j<h; ++j)
+    {
+        for(uchar i=0; i<w; ++i)
+        {
+            layout[j*w + i] = gameEngine->getPrincipalMatrix()[i][j].value == CellValue::MINE;
+        }
+    }
+
+    if(trainerRecorder.bFinish(won, layout))
+    {
+        buttonAnalyzeGame->show();
+        actionAnalyzeLastGame->setEnabled(true);
+        widgetEndGameResultsContents->adjustSize();
+    }
+}
+
+void LibreMinesGui::SLOT_analyzeLastGame()
+{
+    if(!trainerRecorder.hasLastRecording())
+        return;
+
+    TrainerAnalysisDialog dialog(trainerRecorder.lastRecording(), this);
+    dialog.exec();
+}
+
+void LibreMinesGui::SLOT_openRecording()
+{
+    const QString dir = TrainerRecorder::recordingsDirectory();
+    QDir().mkpath(dir);
+
+    const QString path = QFileDialog::getOpenFileName(this, tr("Open Trainer Recording"), dir,
+                                                      tr("Trainer recordings (*.json)"));
+    if(path.isEmpty())
+        return;
+
+    TrainerRecording recording;
+    QString error;
+    if(!TrainerRecording::load(path, recording, &error))
+    {
+        QMessageBox::warning(this, tr("Open Trainer Recording"),
+                             tr("Unable to read %1:\n%2").arg(path, error));
+        return;
+    }
+
+    TrainerAnalysisDialog dialog(recording, this);
+    dialog.exec();
+}
+
+void LibreMinesGui::SLOT_openRecordingsFolder()
+{
+    const QString dir = TrainerRecorder::recordingsDirectory();
+    QDir().mkpath(dir);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
 }
 
 void LibreMinesGui::SLOT_optionChanged(const QString &name, const QString &value)

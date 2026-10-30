@@ -24,6 +24,8 @@
 
 #include "libreminesgui.h"
 #include "libreminesconfig.h"
+#include "traineranalyzer.h"
+#include "traineranalysisdialog.h"
 
 struct InitializeOptions
 {
@@ -39,6 +41,8 @@ struct InitializeOptions
 
     int heightMainWindow = -1;
     int widthMainWindow = -1;
+    QString analyzeFile;     ///< Trainer recording to analyse instead of starting the GUI
+    QString reviewFile;      ///< Trainer recording to open in the analysis window
 };
 
 // This functions will check if the current application local dir is different of
@@ -149,7 +153,9 @@ InitializeOptions getOptions(const QStringList& args)
     parser.addVersionOption();
     parser.addOptions({
                 {"width", "Width of the Main Widget - in pixels", "width", "-1"},
-                {"height", "Height of the Main Widget - in pixels", "height", "-1"}
+                {"height", "Height of the Main Widget - in pixels", "height", "-1"},
+                {"analyze", "Print the trainer analysis of a recorded game (JSON) and exit", "recording"},
+                {"review", "Open the trainer analysis window for a recorded game (JSON)", "recording"}
                       });
 
     parser.process(args);
@@ -158,7 +164,10 @@ InitializeOptions getOptions(const QStringList& args)
 
     w = parser.value("width").toInt();
     h = parser.value("height").toInt();
-    return{h, w};
+    InitializeOptions ops(h, w);
+    ops.analyzeFile = parser.value("analyze");
+    ops.reviewFile = parser.value("review");
+    return ops;
 }
 
 void loadLanguagePreference()
@@ -223,6 +232,35 @@ int main(int argc, char *argv[])
     a.setApplicationVersion(LIBREMINES_PROJECT_VERSION);
 
     InitializeOptions ops = getOptions(a.arguments());
+
+    if(!ops.analyzeFile.isEmpty())
+    {
+        TrainerRecording recording;
+        QString error;
+        QTextStream out(stdout);
+        if(!TrainerRecording::load(ops.analyzeFile, recording, &error))
+        {
+            out << "Unable to read " << ops.analyzeFile << ": " << error << Qt::endl;
+            return 1;
+        }
+        out << TrainerAnalyzer::analyze(recording).toText(recording);
+        out.flush();
+        return 0;
+    }
+
+    if(!ops.reviewFile.isEmpty())
+    {
+        TrainerRecording recording;
+        QString error;
+        if(!TrainerRecording::load(ops.reviewFile, recording, &error))
+        {
+            qWarning() << "Unable to read" << ops.reviewFile << ":" << error;
+            return 1;
+        }
+        TrainerAnalysisDialog dialog(recording);
+        dialog.exec();
+        return 0;
+    }
 
     autoImportScoresAndSettingsFromLocalShare();
 

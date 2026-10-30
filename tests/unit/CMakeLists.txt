@@ -14,3 +14,5 @@ add_libremines_test(test_solver test_solver.cpp)
 
 # Utility tests (future)
 # add_libremines_test(test_utilities test_utilities.cpp)
+
+add_libremines_test(test_trainer test_trainer.cpp)

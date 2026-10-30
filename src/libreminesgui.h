@@ -40,6 +40,7 @@
 #include "soundeffects.h"
 #include "facesreaction.h"
 #include "keyboardcontroller.h"
+#include "trainerrecorder.h"
 
 /**
  * @file libreminesgui.h
@@ -196,6 +197,8 @@ private:
      */
     void updateFaceReaction(FacesReaction::GameEvent newState);
 
+    void vFinishTrainerRecording(const bool won);
+
 private Q_SLOTS:
     /**
      * @brief
@@ -274,6 +277,21 @@ private Q_SLOTS:
 
     void SLOT_saveMinefieldAsImage();
 
+    /**
+     * @brief Open the trainer analysis of the last finished game
+     */
+    void SLOT_analyzeLastGame();
+
+    /**
+     * @brief Let the user pick a saved recording and analyse it
+     */
+    void SLOT_openRecording();
+
+    /**
+     * @brief Open the folder where recordings are stored
+     */
+    void SLOT_openRecordingsFolder();
+
 Q_SIGNALS:
     void SIGNAL_cleanCell(const uchar _X, const uchar _Y);
     void SIGNAL_cleanNeighborCells(const uchar _X, const uchar _Y);
@@ -338,6 +356,14 @@ private:
     QAction* actionShowHighScores;
     QAction* actionImportHighScores;
     QAction* actionExportHighScores;
+
+    QMenu* menuTrainer;
+    QAction* actionAnalyzeLastGame;
+    QAction* actionOpenRecording;
+    QAction* actionOpenRecordingsFolder;
+
+    QPushButton* buttonAnalyzeGame;   ///< Shown at the end of a game to open the analysis
+    TrainerRecorder trainerRecorder;  ///< Records input and cursor for the trainer
 
     QMenu* menuHelp;
     QAction* actionAbout;
