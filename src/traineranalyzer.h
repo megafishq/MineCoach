@@ -40,6 +40,7 @@
 
 #include <QByteArray>
 #include <QHash>
+#include <QRect>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -225,6 +226,14 @@ public:
                                                int center = -1, int radius = 0);
 
     /**
+     * @brief Like deduce(), but only numbers inside `area` (in cells) are used
+     *
+     * Used by practice puzzles: only what the puzzle shows may be used.
+     */
+    static QHash<int, TrainerDeduction> deduceInArea(const TrainerBoard& board, const QRect& area,
+                                                     bool useEnumeration = true);
+
+    /**
      * @brief Human readable name of a deduction kind
      */
     static QString kindName(TrainerDeduction::Kind kind);
@@ -248,6 +257,9 @@ public:
      * Follows TrainerDeduction::support recursively. Flags placed by the
      * player (depth 0) are included so explanations can mention them.
      */
+    static QHash<int, TrainerDeduction> deduceImpl(const TrainerBoard& board, bool useEnumeration,
+                                                   int center, int radius, const QRect& area);
+
     static QVector<TrainerDeduction> prerequisitesOf(const QHash<int, TrainerDeduction>& all,
                                                      const TrainerDeduction& d);
 };

@@ -49,6 +49,7 @@
 #include "libreminesapptheme.h"
 #include "libreminespreferencessaver.h"
 #include "traineranalysisdialog.h"
+#include "trainerpracticedialog.h"
 
 LibreMinesGui::CellGui::CellGui():
     button(nullptr),
@@ -507,6 +508,7 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     actionAnalyzeLastGame = new QAction(this);
     actionOpenRecording = new QAction(this);
     actionOpenRecordingsFolder = new QAction(this);
+    actionAnalyzeRecentGames = new QAction(this);
 
     this->setMenuBar(menuBarGlobal);
     this->setStatusBar(new QStatusBar(this));
@@ -519,7 +521,8 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     menuOptions->addActions({actionPreferences, actionToggleFullScreen});
     menuHighScores->addActions({actionShowHighScores, actionImportHighScores, actionExportHighScores});
     menuHelp->addActions({actionAbout, actionAboutQt, actionGitHubHomePage});
-    menuTrainer->addActions({actionAnalyzeLastGame, actionOpenRecording, actionOpenRecordingsFolder});
+    menuTrainer->addActions({actionAnalyzeLastGame, actionAnalyzeRecentGames, actionOpenRecording,
+                             actionOpenRecordingsFolder});
     menuTrainer->addSeparator();
 
     actionArbiterInput = menuTrainer->addAction(tr("Arbiter Style Mouse Controls"));
@@ -556,6 +559,7 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     actionAnalyzeLastGame->setEnabled(false);
     actionOpenRecording->setText(tr("Open Recording..."));
     actionOpenRecordingsFolder->setText(tr("Open Recordings Folder"));
+    actionAnalyzeRecentGames->setText(tr("Analyze Recent Games && Practice..."));
 
     actionPreferences->setText(tr("Preferences..."));
     actionToggleFullScreen->setText(tr("Toggle Full Screen"));
@@ -746,6 +750,8 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
             this, &LibreMinesGui::SLOT_openRecording);
     connect(actionOpenRecordingsFolder, &QAction::triggered,
             this, &LibreMinesGui::SLOT_openRecordingsFolder);
+    connect(actionAnalyzeRecentGames, &QAction::triggered,
+            this, &LibreMinesGui::SLOT_analyzeRecentGames);
 
     for(QAction* a : {actionArbiterInput, actionInstantRestart, actionFastBoard, actionAskToSaveScores, actionBuzzer})
         connect(a, &QAction::toggled, this, &LibreMinesGui::vSaveTrainerSettings);
@@ -2029,6 +2035,12 @@ void LibreMinesGui::SLOT_openRecording()
     }
 
     TrainerAnalysisDialog dialog(recording, this);
+    dialog.exec();
+}
+
+void LibreMinesGui::SLOT_analyzeRecentGames()
+{
+    TrainerHistoryDialog dialog(TrainerRecorder::recordingsDirectory(), this);
     dialog.exec();
 }
 

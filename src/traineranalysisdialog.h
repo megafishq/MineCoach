@@ -123,9 +123,15 @@ Q_SIGNALS:
      */
     void SIGNAL_cellHovered(int cell);
 
+    /**
+     * @brief A cell was clicked with the left button
+     */
+    void SIGNAL_cellClicked(int cell);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
     void leaveEvent(QEvent* event) override;
 
 private:

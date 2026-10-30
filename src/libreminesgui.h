@@ -303,6 +303,11 @@ private Q_SLOTS:
      */
     void SLOT_openRecordingsFolder();
 
+    /**
+     * @brief Analyse the most recent games and offer a practice playlist
+     */
+    void SLOT_analyzeRecentGames();
+
 Q_SIGNALS:
     void SIGNAL_cleanCell(const uchar _X, const uchar _Y);
     void SIGNAL_cleanNeighborCells(const uchar _X, const uchar _Y);
@@ -372,6 +377,7 @@ private:
     QAction* actionAnalyzeLastGame;
     QAction* actionOpenRecording;
     QAction* actionOpenRecordingsFolder;
+    QAction* actionAnalyzeRecentGames;
 
     QAction* actionArbiterInput;      ///< Arbiter style mouse controls
     QAction* actionInstantRestart;    ///< F2 / face click restart without confirmation

@@ -367,7 +367,8 @@ double euclid(const TrainerBoard& b, int p, int q)
 class SolverState
 {
 public:
-    explicit SolverState(const TrainerBoard& b, int center = -1, int radius = 0) : board(b)
+    explicit SolverState(const TrainerBoard& b, int center = -1, int radius = 0,
+                         const QRect& area = QRect()) : board(b)
     {
         for(int i=0; i<b.value.size(); ++i)
         {
@@ -375,6 +376,8 @@ public:
                 continue;
             // Only numbers inside the window take part
             if(center >= 0 && chebyshev(b, i, center) > radius)
+                continue;
+            if(!area.isNull() && !area.contains(b.xOf(i), b.yOf(i)))
                 continue;
             Constraint c;
             c.origin = i;
@@ -851,7 +854,19 @@ void solveInRounds(SolverState& s, bool useEnumeration)
 QHash<int, TrainerDeduction> TrainerSolver::deduce(const TrainerBoard& board, bool useEnumeration,
                                                    int center, int radius)
 {
-    SolverState s(board, center, radius);
+    return deduceImpl(board, useEnumeration, center, radius, QRect());
+}
+
+QHash<int, TrainerDeduction> TrainerSolver::deduceInArea(const TrainerBoard& board, const QRect& area,
+                                                         bool useEnumeration)
+{
+    return deduceImpl(board, useEnumeration, -1, 0, area);
+}
+
+QHash<int, TrainerDeduction> TrainerSolver::deduceImpl(const TrainerBoard& board, bool useEnumeration,
+                                                       int center, int radius, const QRect& area)
+{
+    SolverState s(board, center, radius, area);
     solveInRounds(s, useEnumeration);
 
     // The player's flags are their own knowledge: a flag that is provable
@@ -869,7 +884,7 @@ QHash<int, TrainerDeduction> TrainerSolver::deduce(const TrainerBoard& board, bo
     if(!anyFlag)
         return s.known;
 
-    SolverState seeded(board, center, radius);
+    SolverState seeded(board, center, radius, area);
     for(auto it = s.known.constBegin(); it != s.known.constEnd(); ++it)
     {
         if(it->mine && board.marks[it.key()] == TrainerBoard::Mark::Flag)
@@ -1077,9 +1092,13 @@ QStringList TrainerSolver::explainSteps(const TrainerBoard& b, const TrainerDedu
             else
             {
                 const int minShared = qMax(0, rh - static_cast<int>(hOnly.size()));
-                steps << QStringLiteral("%1 can put at most %2 outside the shared cells, so the shared cells hold at least %3.")
-                         .arg(hName.left(1).toUpper() + hName.mid(1), mineCount(hOnly.size()),
-                              mineCount(minShared));
+                if(hOnly.isEmpty())
+                    steps << QStringLiteral("%1 has no unknown cells outside the shared ones, so its %2 must be in the shared cells.")
+                             .arg(hName.left(1).toUpper() + hName.mid(1), mineCount(rh));
+                else
+                    steps << QStringLiteral("%1 can put at most %2 outside the shared cells, so the shared cells hold at least %3.")
+                             .arg(hName.left(1).toUpper() + hName.mid(1), mineCount(hOnly.size()),
+                                  mineCount(minShared));
                 steps << QStringLiteral("That already gives %1 all %2 it needs, so its other %3 (%4) %5 safe.")
                          .arg(tName, mineCount(rt), cellCount(tOnly.size()), cellList(tOnly, w),
                               tOnly.size() == 1 ? "is" : "are");

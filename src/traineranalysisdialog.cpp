@@ -245,6 +245,19 @@ void TrainerBoardView::mouseMoveEvent(QMouseEvent* event)
     QToolTip::showText(global, tr("(%1,%2)  column %1, row %2\n%3").arg(x + 1).arg(y + 1).arg(what), this);
 }
 
+void TrainerBoardView::mousePressEvent(QMouseEvent* event)
+{
+    if(event->button() != Qt::LeftButton)
+        return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const int cell = cellAt(event->position());
+#else
+    const int cell = cellAt(event->localPos());
+#endif
+    if(cell >= 0)
+        Q_EMIT SIGNAL_cellClicked(cell);
+}
+
 void TrainerBoardView::leaveEvent(QEvent* event)
 {
     Q_UNUSED(event)

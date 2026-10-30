@@ -195,6 +195,8 @@ set(SOURCE_FILES
     src/trainerrecorder.cpp src/trainerrecorder.h
     src/traineranalyzer.cpp src/traineranalyzer.h
     src/traineranalysisdialog.cpp src/traineranalysisdialog.h
+    src/trainerhistory.cpp src/trainerhistory.h
+    src/trainerpracticedialog.cpp src/trainerpracticedialog.h
     share/facesreaction.qrc
     share/icons.qrc
     share/minefield_themes.qrc

@@ -22,6 +22,7 @@
 
 #include "traineranalyzer.h"
 #include "trainerrecording.h"
+#include "trainerhistory.h"
 
 class TestTrainer : public QObject
 {
@@ -62,6 +63,7 @@ private slots:
     void testDepthIsLayered();
     void testFlagsCountAsKnownOnlyWhenProvable();
     void testLocalWindowIgnoresFarInformation();
+    void testHistorySummaryAndPlaylist();
     void testCursorJumpPointsAtMissedCell();
     void testShortMoveIsNotAJump();
     void testClicksCouldBeChord();
@@ -408,6 +410,48 @@ void TestTrainer::testLocalWindowIgnoresFarInformation()
     // Every local deduction agrees with the truth
     for(auto it = local.constBegin(); it != local.constEnd(); ++it)
         QCOMPARE(it.value().mine, b.isMine(it.key()));
+}
+
+void TestTrainer::testHistorySummaryAndPlaylist()
+{
+    // Two games with the same missed pattern (a jump away from (2,0))
+    TrainerHistory history;
+    for(int g=0; g<2; ++g)
+    {
+        TrainerRecording r = TrainerRecording::fromMinefieldString(
+            ".*.*.....*.*\n"
+            "............\n"
+            "............\n");
+        act(r, TrainerAction::Type::Reveal, 2, 2, 0);
+        act(r, TrainerAction::Type::Reveal, 10, 0, 1500);
+        history.addGame(QString("game%1.json").arg(g), r, TrainerAnalyzer::analyze(r));
+    }
+    QCOMPARE(history.gameCount(), 2);
+
+    const TrainerHistorySummary s = history.summary();
+    QCOMPARE(s.games, 2);
+    QCOMPARE(s.missedPatterns, 2);
+    QVERIFY(!s.missedByPattern.isEmpty());
+    QCOMPARE(s.missedByPattern.first().second, 2);
+    QVERIFY(s.toText().contains("Missed patterns"));
+
+    const QVector<TrainerPuzzle> list = history.playlist(10);
+    QCOMPARE(list.size(), 2);
+    const TrainerPuzzle& p = list.first();
+    QCOMPARE(p.type, TrainerPuzzle::Type::SafeCell);
+    QVERIFY(p.area.contains(2, 0));
+
+    const TrainerRecording& rec = history.recording(p.game);
+    TrainerBoard b(rec);
+    QString why;
+    QVERIFY2(TrainerHistory::checkAnswer(rec, p, b.index(2, 0), &why), qPrintable(why));
+    QVERIFY(!TrainerHistory::checkAnswer(rec, p, b.index(1, 0), &why)); // a mine
+    QVERIFY(why.contains("mine"));
+    QVERIFY(!TrainerHistory::checkAnswer(rec, p, b.index(2, 2), &why)); // already open
+    QVERIFY(why.contains("already open"));
+
+    // The playlist never exceeds what was asked for
+    QCOMPARE(history.playlist(1).size(), 1);
 }
 
 void TestTrainer::testCursorJumpPointsAtMissedCell()

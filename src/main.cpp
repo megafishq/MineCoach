@@ -22,11 +22,14 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QTranslator>
+#include <QFileInfo>
 
 #include "libreminesgui.h"
 #include "libreminesconfig.h"
 #include "traineranalyzer.h"
 #include "traineranalysisdialog.h"
+#include "trainerhistory.h"
+#include "trainerrecorder.h"
 
 struct InitializeOptions
 {
@@ -44,6 +47,7 @@ struct InitializeOptions
     int widthMainWindow = -1;
     QString analyzeFile;     ///< Trainer recording to analyse instead of starting the GUI
     QString reviewFile;      ///< Trainer recording to open in the analysis window
+    int historyGames = 0;    ///< Print the summary of the last N games and exit
 };
 
 // This functions will check if the current application local dir is different of
@@ -156,7 +160,8 @@ InitializeOptions getOptions(const QStringList& args)
                 {"width", "Width of the Main Widget - in pixels", "width", "-1"},
                 {"height", "Height of the Main Widget - in pixels", "height", "-1"},
                 {"analyze", "Print the trainer analysis of a recorded game (JSON) and exit", "recording"},
-                {"review", "Open the trainer analysis window for a recorded game (JSON)", "recording"}
+                {"review", "Open the trainer analysis window for a recorded game (JSON)", "recording"},
+                {"history", "Print the mistakes and missed patterns of the last N recorded games and exit", "N"}
                       });
 
     parser.process(args);
@@ -168,6 +173,7 @@ InitializeOptions getOptions(const QStringList& args)
     InitializeOptions ops(h, w);
     ops.analyzeFile = parser.value("analyze");
     ops.reviewFile = parser.value("review");
+    ops.historyGames = parser.value("history").toInt();
     return ops;
 }
 
@@ -278,6 +284,29 @@ int main(int argc, char *argv[])
             return 1;
         }
         out << TrainerAnalyzer::analyze(recording).toText(recording);
+        out.flush();
+        return 0;
+    }
+
+    if(ops.historyGames > 0)
+    {
+        TrainerHistory history;
+        for(const QString& file : TrainerHistory::recentRecordings(TrainerRecorder::recordingsDirectory(),
+                                                                   ops.historyGames))
+            history.addFile(file);
+        QTextStream out(stdout);
+        out << history.summary().toText();
+        const QVector<TrainerPuzzle> list = history.playlist(20);
+        out << "\nPlaylist (" << list.size() << " puzzles):\n";
+        for(const TrainerPuzzle& p : list)
+            out << "  " << p.category << " - " << QFileInfo(history.path(p.game)).fileName()
+                << " move " << (p.actionIndex + 1)
+                << QString(" (columns %1-%2, rows %3-%4; solve area %5-%6, %7-%8)")
+                       .arg(p.view.left() + 1).arg(p.view.right() + 1)
+                       .arg(p.view.top() + 1).arg(p.view.bottom() + 1)
+                       .arg(p.area.left() + 1).arg(p.area.right() + 1)
+                       .arg(p.area.top() + 1).arg(p.area.bottom() + 1)
+                << "\n";
         out.flush();
         return 0;
     }

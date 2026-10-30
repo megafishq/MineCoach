@@ -30,6 +30,23 @@ minecoach --analyze game.json   # print the text report
 minecoach --review game.json    # open the analysis window
 ```
 
+## Recent games and practice
+
+**Trainer > Analyze Recent Games & Practice...** analyzes your last N games (50 by default) and shows:
+
+- your averages (3BV/s, efficiency) and how many cursor jumps left a safe cell behind;
+- the **patterns you miss most** (satisfied numbers, 1-1, 1-2, 1-2-1, 1-2-2-1, other number pairs, advanced deductions), each with a tip;
+- your **most common mistakes** (rejected / wasted / low-value chords, cursor jumps, unnecessary guesses, wrong flags, ...).
+
+**Start practice** builds a playlist of mini-puzzles cut from your own games at the moments you missed something, weighted towards the patterns you miss most and spread across your games:
+
+- *Find the safe cell*: click any cell that is 100% safe using only the numbers shown.
+- *Best chord square*: click the number whose chord opens the most cells.
+
+After each answer the solution is highlighted, with the simplified view and a step-by-step explanation; the end screen shows your score per pattern.
+
+From the command line, `minecoach --history 50` prints the same summary and playlist.
+
 ## Competitive (Arbiter-style) gameplay
 
 MineCoach is tuned for fast, serious play. Every option below is on by default and can be toggled from the **Trainer** menu (settings are stored in `<app data>/trainer.ini`):
