@@ -49,6 +49,8 @@ const QColor ColorFocus(0, 190, 230);
 const QColor ColorMine(215, 50, 50);
 const QColor ColorKnownMine(70, 70, 78);
 const QColor ColorShared(250, 220, 120);
+const QColor ColorProvableMine(235, 110, 20);      // unflagged mine the numbers already prove
+const QColor ColorUnprovableMine(40, 40, 40, 110); // unflagged mine nothing proves yet
 
 const double AxisMargin = 22;
 
@@ -138,6 +140,8 @@ void TrainerBoardView::setState(const QByteArray& snapshot, const Overlay& o)
     state = snapshot;
     overlay = o;
     board.restore(snapshot);
+    // Which hidden mines could the player already prove at this moment?
+    provable = TrainerSolver::deduce(board);
     update();
 }
 
@@ -419,7 +423,10 @@ void TrainerBoardView::paintEvent(QPaintEvent* event)
             drawHiddenCell(p, r);
 
             if(bShowMines && mine && c != 'f')
-                drawMineDot(p, r, QColor(30, 30, 30, 110), 0.18);
+            {
+                const bool canProve = provable.contains(i) && provable.value(i).mine;
+                drawMineDot(p, r, canProve ? ColorProvableMine : ColorUnprovableMine, canProve ? 0.22 : 0.16);
+            }
 
             if(c == 'f')
             {
@@ -732,7 +739,10 @@ TrainerAnalysisDialog::TrainerAnalysisDialog(const TrainerRecording& recording, 
                     swatch(ColorClue, tr("pattern numbers")) +
                     swatch(ColorSuggested, tr("better cell / chord")) +
                     swatch(ColorExtra, tr("affected cells")) +
-                    swatch(ColorFocus, tr("cell under the mouse in the text")));
+                    swatch(ColorFocus, tr("cell under the mouse in the text")) + QStringLiteral("<br>") +
+                    tr("Mines (with Show mines): ") +
+                    swatch(ColorProvableMine, tr("provable from the open numbers")) +
+                    swatch(QColor(110, 110, 110), tr("not provable yet")));
 
     sliderStep = new QSlider(Qt::Horizontal, this);
     sliderStep->setRange(0, rec.actions.size());

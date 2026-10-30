@@ -352,7 +352,8 @@ public:
         double jumpThreshold = 4.0; ///< Distance in cells counted as a jump
         double localRadius = 2.5;   ///< How close a missed cell must be to the old position
         int jumpWindow = 3;         ///< Missed cells must be solvable from numbers this close to the previous click
-        int guessWindow = 4;        ///< A safe cell solvable from numbers this close to a guess makes it unnecessary
+        int guessWindow = 4;        ///< Safe moves must be solvable from numbers this close to them
+        double sameSpeedSlack = 0.5;///< A safe move counts as "just as fast" if at most this much further away
     };
 
     /**

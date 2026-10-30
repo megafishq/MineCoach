@@ -13,10 +13,13 @@ Every game is recorded: each reveal, flag and chord with its timestamp, plus the
 - **Cursor jumps**: you moved 4+ cells away while a cell next to your cursor was already provable from the numbers around it (within 3 cells of where your cursor was; any depth of reasoning inside that area counts, information from further away does not, and your flags count as known when they are provable). MineCoach never uses the hidden mines to decide this. MineCoach names what you missed (satisfied number, filled number, a `1-1`, `1-2`, `1-2-1` or `1-2-2-1` pattern, or an advanced deduction) and highlights its numbers, the missed cell and the path your cursor took.
 - **Better chord**: a nearby satisfied number would have opened everything your chord did, plus more. The optimal square to chord on is highlighted.
 - **Clicks -> chord**: several single clicks around one number that a single chord (plus any missing flags) would have done in fewer clicks.
-- **Rejected / wasted / low-value chords**, **unnecessary guesses** (clicking an unproven cell while a cell within 4 cells of it was provably safe from the nearby numbers) and **wrong flags**.
+- **Unnecessary guesses**: you clicked an unproven cell while a 100% safe move was just as fast, i.e. no further from your cursor than the cell you guessed. A safe move is either a cell provable from the numbers around it, or a chord on a number whose flags are all provably correct. Guesses where every safe move was further away are left alone, since they can be a deliberate speed trade-off.
+- **Rejected / wasted / low-value chords** and **wrong flags**.
 - Stats: 3BV, 3BV/s, click efficiency, cursor travel and click counts.
 
 Cells are named `(column,row)` counting from the top-left cell `(1,1)`; column and row numbers are drawn around the board, hovering a cell shows its coordinates, and hovering a coordinate in the text outlines that cell on the board.
+
+With **Show mines** on, unflagged mines are drawn orange when the open numbers already prove them and grey when nothing proves them yet, so you can see which mines you could have flagged at that moment.
 
 For pattern findings, **Read more** opens the pattern twice side by side: exactly as it was on the board, and simplified to what matters (each number reduced to the mines it still needs, known mines and shared cells marked, everything else faded), with a step-by-step explanation of why the cell is safe or a mine.
 
@@ -37,6 +40,7 @@ MineCoach is tuned for fast, serious play. Every option below is on by default a
 - **Auto-restart early losses**: if you die before solving a set share of the board's 3BV (default 10%, options Off/5/10/25/50%), a new game starts after a quarter of a second, with no stats, no dialog and no saved recording.
 - **No score popups**: completed games are saved to the high scores silently. Turn on **Ask to Save Scores** for the original dialog; the **Save Score** button is always there.
 - **End-of-game stats**: 3BV solved/total, 3BV/s, clicks and efficiency are shown in the results panel next to the usual statistics.
+- **Live buzzer**: a short buzz and a red flash on the cell when a move changes nothing: a rejected chord, a chord with nothing left to open, or a click on an opened or flagged cell. It only reacts to what is visible on the board, so it never gives away whether a flag is right. Toggle it with **Trainer > Buzz on Useless Moves**.
 
 ### Coming from LibreMines?
 

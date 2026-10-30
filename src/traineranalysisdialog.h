@@ -145,6 +145,7 @@ private:
     QByteArray state;
     Overlay overlay;
     bool bShowMines = true;
+    QHash<int, TrainerDeduction> provable; ///< What the open numbers prove in the shown state
     QRect crop;
     bool bSimplified = false;
     TrainerDeduction simplified;

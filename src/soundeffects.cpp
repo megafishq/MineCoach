@@ -43,6 +43,7 @@ void SoundEffects::SLOT_initializeSounds()
     soundKeyboardControlMove.reset(new QSoundEffect(this));
     soundReleaseCell.reset(new QSoundEffect(this));
     soundFlagCell.reset(new QSoundEffect(this));
+    soundBuzzer.reset(new QSoundEffect(this));
 
     soundDenied->setSource(QUrl("qrc:/sound_effects/denied.wav"));
     soundGameWon->setSource(QUrl("qrc:/sound_effects/game_won.wav"));
@@ -51,6 +52,7 @@ void SoundEffects::SLOT_initializeSounds()
     soundKeyboardControlMove->setSource(QUrl("qrc:/sound_effects/move.wav"));
     soundReleaseCell->setSource(QUrl("qrc:/sound_effects/release_cell.wav"));
     soundFlagCell->setSource(QUrl("qrc:/sound_effects/flag_cell.wav"));
+    soundBuzzer->setSource(QUrl("qrc:/sound_effects/buzzer.wav"));
     
     soundEffects.append(soundDenied);
     soundEffects.append(soundGameWon);
@@ -58,6 +60,7 @@ void SoundEffects::SLOT_initializeSounds()
     soundEffects.append(soundGameLost);
     soundEffects.append(soundReleaseCell);
     soundEffects.append(soundFlagCell);
+    soundEffects.append(soundBuzzer);
 
     soundsInitialized = true;
 }
@@ -136,6 +139,14 @@ void SoundEffects::SLOT_playSound(const SoundType type)
             {
                 // soundFlagCell->stop();
                 soundFlagCell->play();
+            }
+        }break;
+        case SoundEffects::BUZZER:
+        {
+            if(!soundBuzzer->isMuted())
+            {
+                soundBuzzer->stop();
+                soundBuzzer->play();
             }
         }break;
     }

@@ -111,6 +111,18 @@ LibreMinesGui::LibreMinesGui(QWidget *parent, const int thatWidth, const int tha
 
     // The trainer records every cell action, whether it comes from the mouse
     // or from the keyboard controller
+    // Live buzzer: remember how many cells were hidden before the engine
+    // handles a reveal or chord (these connections run before the engine's)
+    auto rememberHidden = [this](const uchar x, const uchar y)
+    {
+        const int before = (gameEngine && gameEngine->isGameActive()) ? gameEngine->hiddenCells() : -1;
+        // Judge the move once the engine has handled it
+        QMetaObject::invokeMethod(this, [this, x, y, before]() { vCheckUselessMove(x, y, before); },
+                                  Qt::QueuedConnection);
+    };
+    connect(this, &LibreMinesGui::SIGNAL_cleanCell, this, rememberHidden);
+    connect(this, &LibreMinesGui::SIGNAL_cleanNeighborCells, this, rememberHidden);
+
     connect(this, &LibreMinesGui::SIGNAL_cleanCell,
             &trainerRecorder, &TrainerRecorder::SLOT_reveal);
     connect(this, &LibreMinesGui::SIGNAL_addOrRemoveFlag,
@@ -395,7 +407,8 @@ void LibreMinesGui::vNewGame(const uchar _X,
     connect(gameEngine.get(), &LibreMinesGameEngine::SIGNAL_cleanNeighborCellsRejected,
             this, [this](const uchar, const uchar, const int, const int)
     {
-        Q_EMIT SIGNAL_playSoundEffect(SoundEffects::DENIED);
+        if(!bBuzzer)
+            Q_EMIT SIGNAL_playSoundEffect(SoundEffects::DENIED);
     });
 
     // Communication (GUI -> GameEngine)
@@ -515,7 +528,10 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     actionInstantRestart = menuTrainer->addAction(tr("Instant Restart (F2 / Click Face)"));
     actionFastBoard = menuTrainer->addAction(tr("Fast Board Setup (No Animation)"));
     actionAskToSaveScores = menuTrainer->addAction(tr("Ask to Save Scores"));
-    for(QAction* a : {actionArbiterInput, actionInstantRestart, actionFastBoard, actionAskToSaveScores})
+    actionBuzzer = menuTrainer->addAction(tr("Buzz on Useless Moves"));
+    actionBuzzer->setToolTip(tr("Buzz and flash the cell when a click or chord changes nothing "
+                                "(rejected chord, chord or click that opens no cell)"));
+    for(QAction* a : {actionArbiterInput, actionInstantRestart, actionFastBoard, actionAskToSaveScores, actionBuzzer})
         a->setCheckable(true);
     menuTrainer->setToolTipsVisible(true);
 
@@ -731,7 +747,7 @@ void LibreMinesGui::vCreateGUI(const int width, const int height)
     connect(actionOpenRecordingsFolder, &QAction::triggered,
             this, &LibreMinesGui::SLOT_openRecordingsFolder);
 
-    for(QAction* a : {actionArbiterInput, actionInstantRestart, actionFastBoard, actionAskToSaveScores})
+    for(QAction* a : {actionArbiterInput, actionInstantRestart, actionFastBoard, actionAskToSaveScores, actionBuzzer})
         connect(a, &QAction::toggled, this, &LibreMinesGui::vSaveTrainerSettings);
     for(QAction* a : actionsAutoRestart)
         connect(a, &QAction::triggered, this, &LibreMinesGui::vSaveTrainerSettings);
@@ -1759,14 +1775,16 @@ void LibreMinesGui::vLoadTrainerSettings()
     bInstantRestart = settings.value("InstantRestart", true).toBool();
     bFastBoard = settings.value("FastBoard", true).toBool();
     bAskToSaveScores = settings.value("AskToSaveScores", false).toBool();
+    bBuzzer = settings.value("Buzzer", true).toBool();
     iAutoRestartPercent = settings.value("AutoRestartPercent", 10).toInt();
 
     const QSignalBlocker b1(actionArbiterInput), b2(actionInstantRestart),
-                         b3(actionFastBoard), b4(actionAskToSaveScores);
+                         b3(actionFastBoard), b4(actionAskToSaveScores), b5(actionBuzzer);
     actionArbiterInput->setChecked(bArbiterInput);
     actionInstantRestart->setChecked(bInstantRestart);
     actionFastBoard->setChecked(bFastBoard);
     actionAskToSaveScores->setChecked(bAskToSaveScores);
+    actionBuzzer->setChecked(bBuzzer);
     for(QAction* a : actionsAutoRestart)
     {
         const QSignalBlocker blocker(a);
@@ -1780,6 +1798,7 @@ void LibreMinesGui::vSaveTrainerSettings()
     bInstantRestart = actionInstantRestart->isChecked();
     bFastBoard = actionFastBoard->isChecked();
     bAskToSaveScores = actionAskToSaveScores->isChecked();
+    bBuzzer = actionBuzzer->isChecked();
     for(QAction* a : actionsAutoRestart)
     {
         if(a->isChecked())
@@ -1792,6 +1811,7 @@ void LibreMinesGui::vSaveTrainerSettings()
     settings.setValue("InstantRestart", bInstantRestart);
     settings.setValue("FastBoard", bFastBoard);
     settings.setValue("AskToSaveScores", bAskToSaveScores);
+    settings.setValue("Buzzer", bBuzzer);
     settings.setValue("AutoRestartPercent", iAutoRestartPercent);
 }
 
@@ -1860,6 +1880,40 @@ void LibreMinesGui::vArbiterPress(const QMouseEvent* const e)
         updateFaceReaction(FacesReaction::HIDDEN_CELL_PRESSED);
         vUpdatePressedCells(e);
     }
+}
+
+void LibreMinesGui::vCheckUselessMove(const uchar x, const uchar y, const int before)
+{
+    // Only judge what the player can see: nothing opened and the game goes on.
+    // Never reacts to wrong flags, which would give away hidden mines.
+    if(!bBuzzer || before < 0 || !gameEngine || !gameEngine->isGameActive())
+        return;
+    if(gameEngine->hiddenCells() != before)
+        return;
+
+    Q_EMIT SIGNAL_playSoundEffect(SoundEffects::BUZZER);
+    vFlashCell(x, y);
+}
+
+void LibreMinesGui::vFlashCell(const uchar x, const uchar y)
+{
+    if(cellLength <= 0)
+        return;
+    if(!flashOverlay)
+    {
+        flashOverlay = new QWidget(widgetBoardContents);
+        flashOverlay->setAttribute(Qt::WA_TransparentForMouseEvents);
+        flashOverlay->setStyleSheet("background-color: rgba(230, 40, 40, 140); border: 2px solid rgb(230, 40, 40);");
+    }
+    flashOverlay->setGeometry(x*cellLength, y*cellLength, cellLength, cellLength);
+    flashOverlay->raise();
+    flashOverlay->show();
+    QPointer<QWidget> overlay = flashOverlay;
+    QTimer::singleShot(250, this, [overlay]()
+    {
+        if(overlay)
+            overlay->hide();
+    });
 }
 
 void LibreMinesGui::vClearPressedCells()

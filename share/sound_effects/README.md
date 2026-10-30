@@ -11,3 +11,5 @@
 * Release cell: https://freesound.org/people/Greencouch/sounds/124897/ 
 
 * Move: https://freesound.org/people/AbdrTar/sounds/558117/
+
+* Buzzer: generated for MineCoach (original work, CC BY-SA 4.0)

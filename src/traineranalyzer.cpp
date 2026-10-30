@@ -1360,43 +1360,131 @@ TrainerReport TrainerAnalyzer::analyze(const TrainerRecording& recording, const 
                 if(provenSafe)
                     break;
 
-                const QHash<int, TrainerDeduction> local =
-                    TrainerSolver::deduce(board, true, cell, options.guessWindow);
+                // Was a 100% safe move available that was just as fast? A
+                // reveal or a chord is one click each, so "as fast" means no
+                // further from where the cursor was than the guessed cell.
+                const int origin = prevCell >= 0 ? prevCell : cell;
+                const double guessDist = euclid(board, origin, cell);
+                const double reach = guessDist + options.sameSpeedSlack;
+                const int window = qMax(options.guessWindow, int(std::ceil(reach)) + options.guessWindow);
+                const QHash<int, TrainerDeduction> area = TrainerSolver::deduce(board, true, origin, window);
 
-                // Was a proven safe cell available somewhere?
-                int nearest = -1;
-                double nearestDist = 1e9;
-                for(auto it = local.constBegin(); it != local.constEnd(); ++it)
+                struct SafeMove { int cell; bool chord; double dist; };
+                QVector<SafeMove> moves;
+                for(auto it = area.constBegin(); it != area.constEnd(); ++it)
                 {
                     const TrainerDeduction& d = it.value();
                     if(d.mine || board.revealed[d.cell] || board.marks[d.cell] != TrainerBoard::Mark::None)
                         continue;
-                    const double dd = euclid(board, cell, d.cell);
-                    if(dd < nearestDist)
+                    const double dd = euclid(board, origin, d.cell);
+                    if(dd <= reach)
+                        moves.append({d.cell, false, dd});
+                }
+                // Chords: every flag around the number is a proven mine and it
+                // still has something to open
+                for(int c=0; c<board.value.size(); ++c)
+                {
+                    if(!board.revealed[c] || board.value[c] <= 0 ||
+                       board.flagsAround(c) != board.value[c])
+                        continue;
+                    const double dd = euclid(board, origin, c);
+                    if(dd > reach)
+                        continue;
+                    bool flagsProven = true, opensSomething = false;
+                    for(int nb : board.neighbours(c))
                     {
-                        nearestDist = dd;
-                        nearest = d.cell;
+                        if(board.marks[nb] == TrainerBoard::Mark::Flag)
+                            flagsProven = flagsProven && area.contains(nb) && area.value(nb).mine;
+                        else if(!board.revealed[nb])
+                            opensSomething = true;
+                    }
+                    if(flagsProven && opensSomething)
+                        moves.append({c, true, dd});
+                }
+                std::sort(moves.begin(), moves.end(), [](const SafeMove& a, const SafeMove& b)
+                          { return a.dist < b.dist; });
+
+                // The safe move must also be visible from the numbers around it
+                int best = -1;
+                bool bestChord = false;
+                QHash<int, TrainerDeduction> bestLocal;
+                for(const SafeMove& m : moves)
+                {
+                    const QHash<int, TrainerDeduction> local =
+                        TrainerSolver::deduce(board, true, m.cell, options.guessWindow);
+                    bool ok = true;
+                    if(m.chord)
+                    {
+                        for(int nb : board.neighbours(m.cell))
+                        {
+                            if(board.marks[nb] == TrainerBoard::Mark::Flag)
+                                ok = ok && local.contains(nb) && local.value(nb).mine;
+                        }
+                    }
+                    else
+                    {
+                        ok = local.contains(m.cell) && !local.value(m.cell).mine;
+                    }
+                    if(ok)
+                    {
+                        best = m.cell;
+                        bestChord = m.chord;
+                        bestLocal = local;
+                        break;
                     }
                 }
-                if(nearest < 0)
-                    break; // a forced guess: nothing provable on the board
+                if(best < 0)
+                    break; // no equally fast safe move: the guess may have been worth it
 
                 stats.guesses++;
                 TrainerFinding f;
                 f.type = TrainerFinding::Type::UnnecessaryGuess;
                 f.actionIndex = i;
                 f.severity = board.isMine(cell) ? 3 : 2;
+                f.fromCell = prevCell;
                 f.actionCell = cell;
-                f.suggestedCell = nearest;
-                f.clueCells = local.value(nearest).clues;
-                f.hasDeduction = true;
-                f.deduction = local.value(nearest);
-                f.prerequisites = TrainerSolver::prerequisitesOf(local, f.deduction);
-                f.title = QStringLiteral("Guessed %1%2 while %3 was provably safe")
-                          .arg(cellName(cell, board.width),
-                               board.isMine(cell) ? QStringLiteral(" (a mine!)") : QString(),
-                               cellName(nearest, board.width));
-                f.detail = describeDeduction(board, local.value(nearest));
+                f.suggestedCell = best;
+                const QString distances = QStringLiteral(" It was %1 cells from your cursor; the guess was %2.")
+                                          .arg(QString::number(euclid(board, origin, best), 'f', 1),
+                                               QString::number(guessDist, 'f', 1));
+                if(bestChord)
+                {
+                    const QVector<int> opens = board.chordPreview(best);
+                    QVector<int> flags;
+                    for(int nb : board.neighbours(best))
+                    {
+                        if(board.marks[nb] == TrainerBoard::Mark::Flag)
+                            flags.append(nb);
+                    }
+                    f.clueCells = {best};
+                    f.extraCells = opens;
+                    f.title = QStringLiteral("Guessed %1%2 while a chord on %3 was 100% safe and just as close")
+                              .arg(cellName(cell, board.width),
+                                   board.isMine(cell) ? QStringLiteral(" (a mine!)") : QString(),
+                                   cellName(best, board.width));
+                    f.detail = QStringLiteral("The %1 at %2 already had all its mines flagged, and those flags "
+                                              "(%3) follow from the numbers, so a chord there would have opened "
+                                              "%4 cell(s) with no risk.%5")
+                               .arg(board.value[best]).arg(cellName(best, board.width))
+                               .arg(cellsText(flags, board.width)).arg(opens.size()).arg(distances);
+                }
+                else
+                {
+                    f.clueCells = bestLocal.value(best).clues;
+                    f.hasDeduction = true;
+                    f.deduction = bestLocal.value(best);
+                    f.prerequisites = TrainerSolver::prerequisitesOf(bestLocal, f.deduction);
+                    f.title = QStringLiteral("Guessed %1%2 while %3 was 100% safe and just as close")
+                              .arg(cellName(cell, board.width),
+                                   board.isMine(cell) ? QStringLiteral(" (a mine!)") : QString(),
+                                   cellName(best, board.width));
+                    f.detail = describeDeduction(board, f.deduction) + distances;
+                }
+                if(prevCell >= 0)
+                {
+                    f.cursorFromMs = prevT;
+                    f.cursorToMs = a.tMs;
+                }
                 report.findings.append(f);
                 break;
             }

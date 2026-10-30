@@ -206,6 +206,8 @@ private:
     void vArbiterRelease(const QMouseEvent* const e);
     bool bCellUnderCursor(const QMouseEvent* const e, uchar& x, uchar& y) const;
     void vUpdatePressedCells(const QMouseEvent* const e);
+    void vCheckUselessMove(const uchar x, const uchar y, const int before);
+    void vFlashCell(const uchar x, const uchar y);
     void vClearPressedCells();
 
 private Q_SLOTS:
@@ -375,12 +377,15 @@ private:
     QAction* actionInstantRestart;    ///< F2 / face click restart without confirmation
     QAction* actionFastBoard;         ///< Skip the minefield generation animation
     QAction* actionAskToSaveScores;   ///< Show the save score dialog after games
+    QAction* actionBuzzer;            ///< Buzz on moves that have no effect
     QList<QAction*> actionsAutoRestart; ///< Auto-restart thresholds (percent of 3BV)
 
     bool bArbiterInput = true;        ///< Flag on press, both-button / middle chord, release anywhere
     bool bInstantRestart = true;      ///< Restart without confirmation (F2, face click)
     bool bFastBoard = true;           ///< No generation animation, reuse cell widgets
     bool bAskToSaveScores = false;    ///< Show the save score dialog (wins are saved silently otherwise)
+    bool bBuzzer = true;              ///< Live buzzer for useless moves
+    QWidget* flashOverlay = nullptr;  ///< Red flash shown over a useless move
     int iAutoRestartPercent = 10;     ///< Auto-restart losses below this percent of 3BV (0 = off)
 
     bool bChordPending = false;       ///< Both buttons (or middle) are down: next release chords

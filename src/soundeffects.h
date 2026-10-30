@@ -77,7 +77,8 @@ public:
         GAME_LOST,                     ///< Sound played when the player loses (hits a mine)
         KEYBOARD_CONTROLLER_MOVE,      ///< Sound played when navigating with keyboard
         RELEASE_CELL,                  ///< Sound played when revealing a cell
-        FLAG_CELL                      ///< Sound played when placing or removing a flag
+        FLAG_CELL,                     ///< Sound played when placing or removing a flag
+        BUZZER                         ///< Sound played when a move had no effect (MineCoach live buzzer)
     };
 
 public Q_SLOTS:
@@ -117,6 +118,7 @@ private:
     QSharedPointer<QSoundEffect> soundKeyboardControlMove; ///< Sound effect for keyboard navigation
     QSharedPointer<QSoundEffect> soundReleaseCell;       ///< Sound effect for cell revealing
     QSharedPointer<QSoundEffect> soundFlagCell;          ///< Sound effect for flag operations
+    QSharedPointer<QSoundEffect> soundBuzzer;            ///< Sound effect for useless moves
 
     QList<QSharedPointer<QSoundEffect>> soundEffects;  ///< List of all sound effects for batch operations
     bool soundsInitialized;              ///< Flag to track if sounds have been initialized
